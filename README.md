@@ -2,7 +2,7 @@
 
 HippoRAG is a novel **retrieval augmented generation (RAG)** framework inspired by the neurobiology of human long-term memory that enables LLMs to continuously **integrate knowledge across external documents**. Our experiments suggest that HippoRAG could provide RAG systems with capabilities that usually require a costly and high-latency iterative LLM pipeline for only a fraction of the computational cost.
 
-For more details, check out our <a href="paper">paper</a>!
+For more details, check out our <a href="https://arxiv.org/abs/2405.14831">paper</a>!
 
 ![HippoRAG](images/hook_figure.png)
 
