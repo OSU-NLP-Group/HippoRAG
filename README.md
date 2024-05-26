@@ -254,6 +254,12 @@ bash src/run_hipporag_case_study.sh
 
 After running these, you can explore the outputs inside the ```output/ircot/``` directory.
 
+
+## TODO
+
+- [ ] Locally Deployed LLMs
+- [ ] Prompt Flexibility
+      
 ## Contact
 
 Questions or issues? File an issue or contact 
