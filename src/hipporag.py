@@ -60,7 +60,7 @@ class HippoRAG():
         self.sim_threshold = sim_threshold
         self.node_specificity = node_specificity
         if colbert_config is None:
-            self.colbert_config = {'root': f'data/lm_vectors/colbert/{args.corpus_name}_{args.extraction_model}',
+            self.colbert_config = {'root': f'data/lm_vectors/colbert/{corpus_name}',
                                'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
         else:
             self.colbert_config = colbert_config  # a dict, 'root', 'doc_index_name', 'phrase_index_name'

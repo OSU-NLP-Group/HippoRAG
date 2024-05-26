@@ -2,7 +2,7 @@
 
 HippoRAG is a novel **retrieval augmented generation (RAG)** framework inspired by the neurobiology of human long-term memory that enables LLMs to continuously **integrate knowledge across external documents**. Our experiments suggest that HippoRAG could provide RAG systems with capabilities that usually require a costly and high-latency iterative LLM pipeline for only a fraction of the computational cost.
 
-For more details, check out our <a href="paper">paper</a>!
+For more details, check out our <a href="https://arxiv.org/submit/5615562">paper</a>!
 
 ![HippoRAG](images/hook_figure.png)
 
@@ -85,7 +85,7 @@ The corpus and optional query JSON files should have the following format:
 
 ### Indexing
 
-Once your corpus is created, add it under the `data` directory. We are now ready to start indexing by running the scripts below.
+Once your corpus is created, add it under the `data` directory. We are now ready to start indexing using the commands below.
 
 We will use the best hyperparameters defined in our paper and assume your dataset name is `sample`.
 
@@ -114,19 +114,22 @@ bash src/setup_hipporag.sh $DATA $HF_RETRIEVER $LLM $GPUS $SYNONYM_THRESH
 
 ### Retrieval
 
-After running indexing, we can start using HippoRAG for online retrieval. Below, we provide two strategies for using HippoRAG, one using a set of **pre-defined queries** and the other involving direct integration with our API.
+After indexing, HippoRAG is ready to aid with online retrieval. Below, we provide two strategies for using HippoRAG:
+1. Running retrieval on a set of **pre-defined queries**.
+2. Integrating directly with our API to receive queries from users. 
 
 #### Pre-Defined Queries
 
-To run retrieval on a specific set of pre-defined queries in the format above, run the following command to use HippoRAG with a ColBERTv2 retrieval backbone:
+To run retrieval on a specific set of **pre-defined queries** in the format described above, we run either of the following commands depending on which retrieval backbone you want to use:
 
+ColBERTv2
 ```shell
 RETRIEVER=colbertv2
 
 python3 src/ircot_hipporag.py --dataset $DATA --retriever $RETRIEVER --llm $LLM --max_steps 1 --doc_ensemble f --top_k 10  --sim_threshold $SYNONYM_THRESH --damping 0.5
 ```
 
-Otherwise, you can run the following to use the Huggingface retrieval model used previously for indexing.
+Huggingface Model (i.e. Contriever)
 
 ```shell
 RETRIEVER=$HF_RETRIEVER
@@ -134,12 +137,12 @@ RETRIEVER=$HF_RETRIEVER
 python3 src/ircot_hipporag.py --dataset $DATA --retriever $RETRIEVER --llm $LLM --max_steps 1 --doc_ensemble f --top_k 10  --sim_threshold $SYNONYM_THRESH --damping 0.5
 ```
 
-**Note:** If you want to couple HippoRAG with the iterative retrieval method IRCoT for complementary improvements, just change the `--max_steps` parameter above to the number of maximum LLM reasoning iterations your dataset requires. Additonally, be sure to make a directory with your dataset's name under `data/ircot_prompt/` and add a file named `gold_with_3_distractors_context_cot_qa_codex.txt` with IRCoT prompts which are appropriate for your dataset. Check out the other datasets' IRCoT prompts for formatting and content inspiration.
+**Note:** In this setting, you can couple HippoRAG with IRCoT for complementary improvements. To run this, just change the `--max_steps` parameter above to the desired maximum number of LLM reasoning steps. Additionally, be sure to make a directory with your dataset's name under `data/ircot_prompt/` and add a file named `gold_with_3_distractors_context_cot_qa_codex.txt` with IRCoT prompts appropriate for your dataset. Check out the other datasets' IRCoT prompts for formatting and content inspiration.
 
 
 #### HippoRAG Integration 
 
-We provide this example script to guide users who would like to integrate the HippoRAG API with their codebase directly:
+We provide this example script to guide users who would like to integrate the HippoRAG API with their codebase directly.
 
 ```python
 import argparse
@@ -161,7 +164,11 @@ if __name__ == '__main__':
 
 ```
 
+To initiate an instance of the HippoRAG class, just choose an **LLM** and a **retrieval encoder model** which you have used to previously index your retrieval dataset.
+
 ## Paper Reproducibility
+
+In this section, you will find all the code necessary to reproduce the results shown in our paper.  
 
 ### Data
 
@@ -255,4 +262,13 @@ The Ohio State University
 
 ## Citation
 
-TBD
+If you find this work useful, please consider citing our paper:
+
+```
+@article{gutiérrez2024hipporag,
+      title={HippoRAG: Neurobiologically Inspired Long-Term Memory for Large Language Models}, 
+      author={Bernal Jiménez Gutiérrez and Yiheng Shu and Yu Gu and Michihiro Yasunaga and Yu Su},
+      journal={arXiv preprint arXiv:2405.14831},
+      year={2024},
+}
+```

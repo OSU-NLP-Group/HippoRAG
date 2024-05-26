@@ -72,7 +72,6 @@ class RetrievalModule:
         precomp_strings, precomp_vectors = self.get_precomputed_plm_vectors(self.retrieval_name_dir)
 
         #Get AUI Strings to be Encoded
-        
         string_df = pd.read_csv(string_filename, sep='\t')
         string_df.strings = [processing_phrases(str(s)) for s in string_df.strings]
         sorted_df = self.create_sorted_df(string_df.strings.values)
@@ -266,6 +265,9 @@ class RetrievalModule:
 
         for string in queries:
             new_vecs.append(self.vector_dict[string])
+
+        if len(original_vecs) == 0 or len(new_vecs) == 0:
+            return {}
 
         original_vecs = np.vstack(original_vecs)
         new_vecs = np.vstack(new_vecs)
