@@ -152,16 +152,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
     parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo-1106')
-    parser.add_argument('--retrieval_model', type=str, choices=['facebook/contriever','colbertv2'])
-    parser.add_argument('--doc_ensemble', type=bool, action='store_true')
+    parser.add_argument('--retrieval_model', type=str, choices=['facebook/contriever', 'colbertv2'])
+    parser.add_argument('--doc_ensemble', action='store_true')
     args = parser.parse_args()
-    
-    hipporag = HippoRAG(args.dataset_name, args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble)
-    
+
+    hipporag = HippoRAG(args.dataset, args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble)
+
     queries = ["Which Stanford University professor works on Alzheimer's"]
     for query in queries:
-        ranks, scores, logs = hipporag.rank_docs(query,top_k=10)
+        ranks, scores, logs = hipporag.rank_docs(query, top_k=10)
 
+        print(ranks)
+        print(scores)
 ```
 
 To initiate an instance of the HippoRAG class, just choose an **LLM** and a **retrieval encoder model** which you have used to previously index your retrieval dataset.
