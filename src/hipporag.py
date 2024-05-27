@@ -6,6 +6,7 @@ import ipdb
 from colbert import Searcher
 from colbert.data import Queries
 from colbert.infra import RunConfig, Run, ColBERTConfig
+from langchain_community.chat_models import ChatOllama
 
 from named_entity_extraction_parallel import *
 from processing import *
@@ -297,17 +298,17 @@ class HippoRAG():
 
     def load_important_files(self):
         possible_files = glob(
-            'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name))
+            'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed))
         max_samples = np.max(
-            [int(file.split('{}_'.format(self.extraction_model_name))[1].split('.json')[0]) for file in possible_files])
+            [int(file.split('{}_'.format(self.extraction_model_name_processed))[1].split('.json')[0]) for file in possible_files])
         extracted_file = json.load(open(
-            'output/openie_{}_results_{}_{}_{}.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name, max_samples),
+            'output/openie_{}_results_{}_{}_{}.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed, max_samples),
             'r'))
 
         self.extracted_triples = extracted_file['docs']
 
         if self.extraction_model_name != 'gpt-3.5-turbo-1106':
-            self.extraction_type = self.extraction_type + '_' + self.extraction_model_name
+            self.extraction_type = self.extraction_type + '_' + self.extraction_model_name_processed
 
         if self.corpus_name == 'hotpotqa':
             self.dataset_df = pd.DataFrame([p['passage'].split('\n')[0] for p in self.extracted_triples])
@@ -335,12 +336,14 @@ class HippoRAG():
 
         try:
             self.relations_dict = pickle.load(open(
-                'output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                               self.extraction_type, self.retrieval_model_name_processed, self.version), 'rb'))
+                'output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(
+                    self.corpus_name, self.graph_type, self.phrase_type,
+                    self.extraction_type, self.retrieval_model_name_processed, self.version), 'rb'))
         except:
-            self.relations_dict = pickle.load(open('output/{}_{}_graph_relation_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                                                               self.extraction_type, self.retrieval_model_name_processed,
-                                                                                                               self.version), 'rb'))
+            self.relations_dict = pickle.load(open('output/{}_{}_graph_relation_dict_{}_{}.{}.subset.p'.format(
+                self.corpus_name, self.graph_type, self.phrase_type,
+                self.extraction_type, self.retrieval_model_name_processed,
+                self.version), 'rb'))
 
         self.lose_facts = list(self.lose_fact_dict.keys())
         self.lose_facts = [self.lose_facts[i] for i in np.argsort(list(self.lose_fact_dict.values()))]
@@ -604,15 +607,21 @@ class HippoRAG():
                                                               AIMessage(query_prompt_one_shot_output),
                                                               HumanMessage(query_prompt_template.format(text))])
         query_ner_messages = query_ner_prompts.format_prompt()
-
+        json_mode = False
         if isinstance(client, ChatOpenAI):  # JSON mode
             chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'], response_format={"type": "json_object"})
             response_content = chat_completion.content
+            total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
+            json_mode = True
+        elif isinstance(client, ChatOllama):
+            response_content = client.invoke(query_ner_messages.to_messages())
         else:  # no JSON mode
             chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'])
             response_content = chat_completion.content
             response_content = extract_json_dict(response_content)
+            total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
 
+        if not json_mode:
             try:
                 assert 'named_entities' in response_content
                 response_content = str(response_content)
@@ -620,7 +629,6 @@ class HippoRAG():
                 print('Query NER exception', e)
                 response_content = {'named_entities': []}
 
-        total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
         return response_content, total_tokens
 
 

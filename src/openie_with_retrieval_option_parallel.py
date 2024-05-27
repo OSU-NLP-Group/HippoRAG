@@ -1,3 +1,9 @@
+import sys
+
+from langchain_community.chat_models import ChatOllama
+
+sys.path.append('.')
+
 import argparse
 import json
 from glob import glob
@@ -33,17 +39,21 @@ def named_entity_recognition(passage: str):
                 chat_completion = client.invoke(ner_messages.to_messages(), temperature=0, response_format={"type": "json_object"})
                 response_content = chat_completion.content
                 response_content = eval(response_content)
+                total_tokens += chat_completion.response_metadata['token_usage']['total_tokens']
+            elif isinstance(client, ChatOllama):
+                response_content = client.invoke(ner_messages.to_messages())
+                response_content = extract_json_dict(response_content)
+                total_tokens += len(response_content.split())
             else:  # no JSON mode
                 chat_completion = client.invoke(ner_messages.to_messages(), temperature=0)
                 response_content = chat_completion.content
                 response_content = extract_json_dict(response_content)
+                total_tokens += chat_completion.response_metadata['token_usage']['total_tokens']
 
             if 'named_entities' not in response_content:
                 response_content = []
             else:
                 response_content = response_content['named_entities']
-
-            total_tokens += chat_completion.response_metadata['token_usage']['total_tokens']
 
             not_done = False
         except Exception as e:
@@ -61,12 +71,18 @@ def openie_post_ner_extract(passage: str, entities: list, model: str):
         if isinstance(client, ChatOpenAI):  # JSON mode
             chat_completion = client.invoke(openie_messages.to_messages(), temperature=0, max_tokens=4096, response_format={"type": "json_object"})
             response_content = chat_completion.content
+            total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
+        elif isinstance(client, ChatOllama):
+            response_content = client.invoke(openie_messages.to_messages())
+            response_content = extract_json_dict(response_content)
+            response_content = str(response_content)
+            total_tokens = len(response_content.split())
         else:  # no JSON mode
             chat_completion = client.invoke(openie_messages.to_messages(), temperature=0, max_tokens=4096)
             response_content = chat_completion.content
             response_content = extract_json_dict(response_content)
             response_content = str(response_content)
-        total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
+            total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
 
     except Exception as e:
         print('OpenIE exception', e)
@@ -168,7 +184,6 @@ if __name__ == '__main__':
 
 
     def extract_openie_from_triples(triple_json):
-        """Can only do OpenAI Prompting"""
 
         new_json = []
         all_entities = []
@@ -252,5 +267,6 @@ if __name__ == '__main__':
                            "current_cost": current_cost,
                            "approx_total_cost": approx_total_cost,
                            }
-
-        json.dump(extra_info_json, open('output/openie{}_results_{}.json'.format(dataset, arg_str), 'w'))
+        output_path = 'output/openie{}_results_{}.json'.format(dataset, arg_str)
+        json.dump(extra_info_json, open(output_path, 'w'))
+        print('OpenIE saved to', output_path)

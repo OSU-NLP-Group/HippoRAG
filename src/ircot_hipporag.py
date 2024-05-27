@@ -132,6 +132,7 @@ if __name__ == '__main__':
     dpr_only = string_to_bool(args.dpr_only)
 
     client = init_langchain_model(args.llm, args.llm_model)
+    llm_model_name_processed = args.llm_model.replace('/', '_').replace('.', '_')
     if args.llm_model == 'gpt-3.5-turbo-1106':  # Default OpenIE system
         colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
     else:
@@ -164,11 +165,11 @@ if __name__ == '__main__':
         dpr_only_str = 'hipporag'
 
     if args.graph_alg == 'ppr':
-        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.retrieval_model_name_processed}_demo_{args.num_demo}_{args.llm_model}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_sim_thresh_{args.sim_threshold}'
+        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.retrieval_model_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_sim_thresh_{args.sim_threshold}'
         if args.damping != 0.1:
             output_path += f'_damping_{args.damping}'
     else:
-        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.retrieval_model_name_processed}_demo_{args.num_demo}_{args.llm_model}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_sim_thresh_{args.sim_threshold}'
+        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.retrieval_model_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_sim_thresh_{args.sim_threshold}'
 
     if args.wo_node_spec:
         output_path += 'wo_node_spec'
