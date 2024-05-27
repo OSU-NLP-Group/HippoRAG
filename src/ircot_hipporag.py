@@ -1,22 +1,22 @@
 import sys
 
-import ipdb
-
 sys.path.append('.')
 
+import ipdb
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
+
+from src.langchain_util import init_langchain_model
 from transformers.hf_argparser import string_to_bool
 import argparse
 import json
-import os
 
-from openai import OpenAI
 from tqdm import tqdm
 
 from hipporag import HippoRAG
 
 ircot_reason_instruction = 'You serve as an intelligent assistant, adept at facilitating users through complex, multi-hop reasoning across multiple documents. This task is illustrated through demonstrations, each consisting of a document set paired with a relevant question and its multi-hop reasoning thoughts. Your task is to generate one thought for current step, DON\'T generate the whole thoughts at once! If you reach what you believe to be the final step, start with "So the answer is:".'
 
-OPENAI_COST=0
 
 def parse_prompt(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -47,7 +47,7 @@ def parse_prompt(file_path):
 
 def retrieve_step(query: str, corpus, top_k: int, rag: HippoRAG, dataset: str):
     ranks, scores, logs = rag.rank_docs(query, top_k=top_k)
-    if dataset in ['hotpotqa','hotpotqa_train']:
+    if dataset in ['hotpotqa', 'hotpotqa_train']:
         retrieved_passages = []
         for rank in ranks:
             key = list(corpus.keys())[rank]
@@ -79,34 +79,28 @@ def merge_elements_with_same_first_line(elements, prefix='Wikipedia Title: '):
     return merged_elements
 
 
-def reason_step(dataset, few_shot: list, query: str, passages: list, thoughts: list, client: OpenAI, model='gpt-3.5-turbo'):
+def reason_step(dataset, few_shot: list, query: str, passages: list, thoughts: list, client):
     """
     Given few-shot samples, query, previous retrieved passages, and previous thoughts, generate the next thought with OpenAI models. The generated thought is used for further retrieval step.
     :return: next thought
     """
-    global OPENAI_COST
     prompt_demo = ''
     for sample in few_shot:
         prompt_demo += f'{sample["document"]}\n\nQuestion: {sample["question"]}\nThought: {sample["answer"]}\n\n'
 
     prompt_user = ''
-    if dataset in ['hotpotqa','hotpotqa_train']:
+    if dataset in ['hotpotqa', 'hotpotqa_train']:
         passages = merge_elements_with_same_first_line(passages)
     for passage in passages:
         prompt_user += f'{passage}\n\n'
     prompt_user += f'Question: {query}\nThought:' + ' '.join(thoughts)
 
-    messages = [{'role': 'system', 'content': ircot_reason_instruction + prompt_demo},
-                {'role': 'user', 'content': prompt_user}]
+    messages = ChatPromptTemplate.from_messages([SystemMessage(ircot_reason_instruction + '\n\n' + prompt_demo),
+                                                 HumanMessage(prompt_user)]).format_prompt()
 
     try:
-        per_token_input = 1 / 10 ** 6
-        per_token_output = 2 / 10 ** 6
-
-        chat_completion = client.chat.completions.create(messages=messages, model=model)
-        response_content = chat_completion.choices[0].message.content
-
-        OPENAI_COST += chat_completion.usage.prompt_tokens * per_token_input + chat_completion.usage.completion_tokens*per_token_output
+        chat_completion = client.invoke(messages.to_messages())
+        response_content = chat_completion.content
     except Exception as e:
         print(e)
         return ''
@@ -116,7 +110,8 @@ def reason_step(dataset, few_shot: list, query: str, passages: list, thoughts: l
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
-    parser.add_argument('--llm', type=str, default='gpt-3.5-turbo-1106')
+    parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
+    parser.add_argument('--llm_model', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
     parser.add_argument('--prompt', type=str)
     parser.add_argument('--num_demo', type=int, default=1, help='the number of demo samples')
@@ -129,21 +124,20 @@ if __name__ == '__main__':
     parser.add_argument('--sim_threshold', type=float, default=0.8)
     parser.add_argument('--recognition_threshold', type=float, default=0.9)
     parser.add_argument('--damping', type=float, default=0.1)
-    parser.add_argument('--force_retry',action='store_true')
+    parser.add_argument('--force_retry', action='store_true')
     args = parser.parse_args()
 
     # Please set environment variable OPENAI_API_KEY
     doc_ensemble = string_to_bool(args.doc_ensemble)
     dpr_only = string_to_bool(args.dpr_only)
 
-    client = OpenAI(api_key=os.getenv('OPENAI_KEY'), max_retries=5)
-    if args.llm == 'gpt-3.5-turbo-1106': #Default OpenIE system
-        colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2',
-                           'phrase_index_name': 'nbits_2'}
+    client = init_langchain_model(args.llm, args.llm_model)
+    if args.llm_model == 'gpt-3.5-turbo-1106':  # Default OpenIE system
+        colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
     else:
-        colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}_{args.llm}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
+        colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}_{args.llm_model}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
 
-    rag = HippoRAG(args.dataset, args.llm, args.retriever, doc_ensemble=doc_ensemble, node_specificity=not(args.wo_node_spec), sim_threshold=args.sim_threshold,
+    rag = HippoRAG(args.dataset, args.llm, args.llm_model, args.retriever, doc_ensemble=doc_ensemble, node_specificity=not (args.wo_node_spec), sim_threshold=args.sim_threshold,
                    colbert_config=colbert_configs, dpr_only=dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold)
 
     data = json.load(open(f'data/{args.dataset}.json', 'r'))
@@ -170,11 +164,11 @@ if __name__ == '__main__':
         dpr_only_str = 'hipporag'
 
     if args.graph_alg == 'ppr':
-        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.retrieval_model_name_processed}_demo_{args.num_demo}_{args.llm}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_sim_thresh_{args.sim_threshold}'
+        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.retrieval_model_name_processed}_demo_{args.num_demo}_{args.llm_model}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_sim_thresh_{args.sim_threshold}'
         if args.damping != 0.1:
             output_path += f'_damping_{args.damping}'
     else:
-        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.retrieval_model_name_processed}_demo_{args.num_demo}_{args.llm}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_sim_thresh_{args.sim_threshold}'
+        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.retrieval_model_name_processed}_demo_{args.num_demo}_{args.llm_model}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_sim_thresh_{args.sim_threshold}'
 
     if args.wo_node_spec:
         output_path += 'wo_node_spec'
@@ -193,7 +187,7 @@ if __name__ == '__main__':
         try:
             with open(output_path, 'r') as f:
                 results = json.load(f)
-            if args.dataset in ['hotpotqa', '2wikimultihopqa','hotpotqa_train']:
+            if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
                 processed_ids = {sample['_id'] for sample in results}
             else:
                 processed_ids = {sample['id'] for sample in results}
@@ -213,7 +207,7 @@ if __name__ == '__main__':
         print()
 
     for sample_idx, sample in tqdm(enumerate(data), total=len(data), desc='IRCoT retrieval'):  # for each sample
-        if args.dataset in ['hotpotqa', '2wikimultihopqa','hotpotqa_train']:
+        if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
             sample_id = sample['_id']
         else:
             sample_id = sample['id']
@@ -233,7 +227,7 @@ if __name__ == '__main__':
         retrieved_passages_dict = {passage: score for passage, score in zip(retrieved_passages, scores)}
 
         while it < max_steps:  # for each iteration of IRCoT
-            new_thought = reason_step(args.dataset, few_shot_samples, query, retrieved_passages[:args.top_k], thoughts, client, args.llm)
+            new_thought = reason_step(args.dataset, few_shot_samples, query, retrieved_passages[:args.top_k], thoughts, client)
             thoughts.append(new_thought)
             if 'So the answer is:' in new_thought:
                 break
@@ -255,7 +249,7 @@ if __name__ == '__main__':
         # end iteration
 
         # calculate recall
-        if args.dataset in ['hotpotqa','hotpotqa_train']:
+        if args.dataset in ['hotpotqa', 'hotpotqa_train']:
             gold_passages = [item for item in sample['supporting_facts']]
             gold_items = set([item[0] for item in gold_passages])
             retrieved_items = [passage.split('\n')[0].strip() for passage in retrieved_passages]
@@ -283,7 +277,7 @@ if __name__ == '__main__':
         for gold_item in gold_items:
             phrases_in_gold_docs.append(rag.get_phrases_in_doc_str(gold_item))
 
-        if args.dataset in ['hotpotqa', '2wikimultihopqa','hotpotqa_train']:
+        if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
             sample['supporting_docs'] = [item for item in sample['supporting_facts']]
         else:
             sample['supporting_docs'] = [item for item in sample['paragraphs'] if item['is_supporting']]
@@ -307,4 +301,3 @@ if __name__ == '__main__':
     with open(output_path, 'w') as f:
         json.dump(results, f)
     print(f'Saved {len(results)} results to {output_path}')
-    print(f'Used ${OPENAI_COST} in this experiment.')

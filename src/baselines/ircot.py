@@ -2,8 +2,11 @@ import sys
 
 sys.path.append('.')
 
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
+
+from src.langchain_util import init_langchain_model, num_tokens_by_tiktoken
 from src.baselines import mean_pooling_embedding_with_normalization
-from src.llm_util import num_tokens_by_tiktoken
 from src.elastic_search_tool import search_with_score
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -21,7 +24,6 @@ import argparse
 import json
 import os
 
-from openai import OpenAI
 from tqdm import tqdm
 
 ircot_reason_instruction = 'You serve as an intelligent assistant, adept at facilitating users through complex, multi-hop reasoning across multiple documents. This task is illustrated through demonstrations, each consisting of a document set paired with a relevant question and its multi-hop reasoning thoughts. Your task is to generate one thought for current step, DON\'T generate the whole thoughts at once! If you reach what you believe to be the final step, start with "So the answer is:".'
@@ -207,9 +209,10 @@ def merge_elements_with_same_first_line(elements, prefix='Wikipedia Title: '):
     return merged_elements
 
 
-def reason_step(dataset, few_shot: list, query: str, passages: list, thoughts: list, client: OpenAI, model='gpt-3.5-turbo'):
+def reason_step(dataset, few_shot: list, query: str, passages: list, thoughts: list, client):
     """
-    Given few-shot samples, query, previous retrieved passages, and previous thoughts, generate the next thought with OpenAI models. The generated thought is used for further retrieval step.
+    Given few-shot samples, query, previous retrieved passages, and previous thoughts, generate the next thought with LangChain LLM.
+    The generated thought is used for further retrieval step.
     :return: next thought
     """
     prompt_demo = ''
@@ -226,12 +229,12 @@ def reason_step(dataset, few_shot: list, query: str, passages: list, thoughts: l
         if num_tokens_by_tiktoken(ircot_reason_instruction + prompt_demo + cur_sample + prompt_user) < 15000:
             prompt_demo += cur_sample
 
-    messages = [{'role': 'system', 'content': ircot_reason_instruction + '\n\n' + prompt_demo},
-                {'role': 'user', 'content': prompt_user}]
+    messages = ChatPromptTemplate.from_messages([SystemMessage(ircot_reason_instruction + '\n\n' + prompt_demo),
+                                                 HumanMessage(prompt_user)]).format_prompt()
 
     try:
-        chat_completion = client.chat.completions.create(messages=messages, model=model)
-        response_content = chat_completion.choices[0].message.content
+        chat_completion = client.invoke(messages.to_messages())
+        response_content = chat_completion.content
     except Exception as e:
         print(e)
         return ''
@@ -258,7 +261,7 @@ def process_sample(idx, sample, args, corpus, retriever, client, processed_ids):
     retrieved_passages_dict = {passage: score for passage, score in zip(retrieved_passages, scores)}
     it = 1
     for it in range(1, max_steps):
-        new_thought = reason_step(args.dataset, few_shot_samples, query, retrieved_passages[:args.top_k], thoughts, client, args.llm)
+        new_thought = reason_step(args.dataset, few_shot_samples, query, retrieved_passages[:args.top_k], thoughts, client)
         thoughts.append(new_thought)
         if 'So the answer is:' in new_thought:
             break
@@ -301,9 +304,9 @@ def process_sample(idx, sample, args, corpus, retriever, client, processed_ids):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--api_key', type=str)
     parser.add_argument('--dataset', type=str, choices=['hotpotqa', 'musique', '2wikimultihopqa'], required=True)
-    parser.add_argument('--llm', type=str, default='gpt-3.5-turbo-1106')
+    parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
+    parser.add_argument('--llm_model', type=str, default='gpt-3.5-turbo-1106')
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
     parser.add_argument('--prompt', type=str)
     parser.add_argument('--unit', type=str, choices=['hippo', 'proposition'], default='hippo')
@@ -314,8 +317,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     retriever_name = args.retriever.replace('/', '_').replace('.', '_')
-    # Please set environment variable OPENAI_API_KEY
-    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY') if args.api_key is None else args.api_key, max_retries=5, timeout=60)
+    client = init_langchain_model(args.llm, args.llm_model)
     colbert_configs = {'root': f'data/lm_vectors/colbertv2/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
 
     # load dataset and corpus
@@ -343,7 +345,7 @@ if __name__ == '__main__':
     # doc_ensemble_str = 'doc_ensemble' if doc_ensemble else 'no_ensemble'
     doc_ensemble_str = ''
     if max_steps > 1:
-        output_path = f'output/ircot/{args.dataset}_{retriever_name}_demo_{args.num_demo}_{args.llm}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}.json'
+        output_path = f'output/ircot/{args.dataset}_{retriever_name}_demo_{args.num_demo}_{args.llm_model}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}.json'
     else:  # only one step
         args.top_k = 100
         output_path = f'output/{args.unit}_{args.dataset}_{retriever_name}_{doc_ensemble_str}.json'

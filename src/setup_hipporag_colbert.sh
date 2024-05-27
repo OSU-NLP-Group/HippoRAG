@@ -1,5 +1,5 @@
 data=$1
-extraction_model=$2
+extraction_model=$2  # LLM using LangChain, e.g., 'gpt-3.5-turbo' or 'meta-llama/Llama-3-8b-chat-hf'
 available_gpus=$3
 syn_thresh=$4
 extraction_type=ner

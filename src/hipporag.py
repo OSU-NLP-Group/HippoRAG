@@ -3,7 +3,6 @@ from collections import defaultdict
 
 import igraph as ig
 import ipdb
-import pandas as pd
 from colbert import Searcher
 from colbert.data import Queries
 from colbert.infra import RunConfig, Run, ColBERTConfig
@@ -11,13 +10,11 @@ from colbert.infra import RunConfig, Run, ColBERTConfig
 from named_entity_extraction_parallel import *
 from processing import *
 import os
-import sys
 from glob import glob
 from transformers import AutoModel, AutoTokenizer
 import json
 import torch
 
-client = OpenAI(api_key=os.getenv('OPENAI_KEY'))
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
 COLBERT_CKPT_DIR = "exp/colbertv2.0"
@@ -29,12 +26,12 @@ def min_max_normalize(x):
 
 class HippoRAG():
 
-    def __init__(self, corpus_name='hotpotqa', extraction_model='gpt-3.5-turbo-1106', retrieval_model_name='facebook/contriever',
+    def __init__(self, corpus_name='hotpotqa', extraction_model='openai', extraction_model_name='gpt-3.5-turbo-1106', retrieval_model_name='facebook/contriever',
                  extraction_type='ner', graph_type='facts_and_sim', sim_threshold=0.8, node_specificity=True, doc_ensemble=False,
                  colbert_config=None, dpr_only=False, graph_alg='ppr', damping=0.1, recognition_threshold=0.9):
         """
         @param corpus_name: Name of the dataset to use for retrieval
-        @param extraction_model: LLM used for query NER
+        @param extraction_model_name: LLM used for query NER
         @param retrieval_model_name: Retrieval encoder used to link query named entities with query nodes
         @param extraction_type: Type of NER extraction during indexing
         @param graph_type: Type of graph used by HippoRAG
@@ -49,8 +46,9 @@ class HippoRAG():
         """
 
         self.corpus_name = corpus_name
-        self.extraction_model = extraction_model
-        self.extraction_model_processed = extraction_model.replace('/', '_')
+        self.extraction_model_name = extraction_model_name
+        self.extraction_model_name_processed = extraction_model_name.replace('/', '_')
+        self.client = init_langchain_model(extraction_model, extraction_model_name)
         self.retrieval_model_name = retrieval_model_name  # 'colbertv2', 'facebook/contriever', or other HuggingFace models
         self.retrieval_model_name_processed = retrieval_model_name.replace('/', '_').replace('.', '')
 
@@ -61,7 +59,7 @@ class HippoRAG():
         self.node_specificity = node_specificity
         if colbert_config is None:
             self.colbert_config = {'root': f'data/lm_vectors/colbert/{corpus_name}',
-                               'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
+                                   'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
         else:
             self.colbert_config = colbert_config  # a dict, 'root', 'doc_index_name', 'phrase_index_name'
 
@@ -72,9 +70,9 @@ class HippoRAG():
         self.version = 'v3'
 
         try:
-            self.named_entity_cache = pd.read_csv('output/{}_queries.named_entity_output.tsv'.format(self.corpus_name),sep='\t')
+            self.named_entity_cache = pd.read_csv('output/{}_queries.named_entity_output.tsv'.format(self.corpus_name), sep='\t')
         except:
-            self.named_entity_cache = pd.DataFrame([], columns=['query','triples'])
+            self.named_entity_cache = pd.DataFrame([], columns=['query', 'triples'])
 
         if 'query' in self.named_entity_cache:
             self.named_entity_cache = {row['query']: eval(row['triples']) for i, row in
@@ -131,7 +129,7 @@ class HippoRAG():
                 if query in self.named_entity_cache:
                     query_ner_list = self.named_entity_cache[query]['named_entities']
                 else:
-                    query_ner_json, total_tokens = self.named_entity_recognition(query, self.extraction_model)
+                    query_ner_json, total_tokens = self.named_entity_recognition(query)
                     query_ner_list = eval(query_ner_json)['named_entities']
 
                 query_ner_list = [processing_phrases(p) for p in query_ner_list]
@@ -174,9 +172,9 @@ class HippoRAG():
             elif self.graph_alg == 'none':
                 ppr_phrase_probs = combined_vector
             elif self.graph_alg == 'neighbor_2':
-                ppr_phrase_probs = self.get_neighbors(combined_vector,2)
+                ppr_phrase_probs = self.get_neighbors(combined_vector, 2)
             elif self.graph_alg == 'neighbor_3':
-                ppr_phrase_probs = self.get_neighbors(combined_vector,3)
+                ppr_phrase_probs = self.get_neighbors(combined_vector, 3)
             elif self.graph_alg == 'paths':
                 ppr_phrase_probs = self.get_neighbors(combined_vector, 3)
             else:
@@ -220,7 +218,7 @@ class HippoRAG():
         sorted_doc_ids = np.argsort(doc_prob, kind='mergesort')[::-1]
         sorted_scores = doc_prob[sorted_doc_ids]
 
-        if not(self.dpr_only) and len(query_ner_list) > 0:
+        if not (self.dpr_only) and len(query_ner_list) > 0:
             # logs
             phrase_one_hop_triples = []
             for phrase_id in np.where(top_phrase_vectors > 0)[0]:
@@ -299,17 +297,17 @@ class HippoRAG():
 
     def load_important_files(self):
         possible_files = glob(
-            'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name,self.extraction_type, self.extraction_model))
+            'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name))
         max_samples = np.max(
-            [int(file.split('{}_'.format(self.extraction_model))[1].split('.json')[0]) for file in possible_files])
+            [int(file.split('{}_'.format(self.extraction_model_name))[1].split('.json')[0]) for file in possible_files])
         extracted_file = json.load(open(
-            'output/openie_{}_results_{}_{}_{}.json'.format(self.corpus_name,self.extraction_type, self.extraction_model, max_samples),
+            'output/openie_{}_results_{}_{}_{}.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name, max_samples),
             'r'))
 
         self.extracted_triples = extracted_file['docs']
 
-        if self.extraction_model != 'gpt-3.5-turbo-1106':
-            self.extraction_type = self.extraction_type + '_' + self.extraction_model
+        if self.extraction_model_name != 'gpt-3.5-turbo-1106':
+            self.extraction_type = self.extraction_type + '_' + self.extraction_model_name
 
         if self.corpus_name == 'hotpotqa':
             self.dataset_df = pd.DataFrame([p['passage'].split('\n')[0] for p in self.extracted_triples])
@@ -330,10 +328,10 @@ class HippoRAG():
 
         self.kb_phrase_dict = pickle.load(open(
             'output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                         self.extraction_type, self.version), 'rb'))
+                                                                      self.extraction_type, self.version), 'rb'))
         self.lose_fact_dict = pickle.load(open(
             'output/{}_{}_graph_fact_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                       self.extraction_type, self.version), 'rb'))
+                                                                    self.extraction_type, self.version), 'rb'))
 
         try:
             self.relations_dict = pickle.load(open(
@@ -341,7 +339,8 @@ class HippoRAG():
                                                                                self.extraction_type, self.retrieval_model_name_processed, self.version), 'rb'))
         except:
             self.relations_dict = pickle.load(open('output/{}_{}_graph_relation_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                           self.extraction_type, self.retrieval_model_name_processed, self.version), 'rb'))
+                                                                                                               self.extraction_type, self.retrieval_model_name_processed,
+                                                                                                               self.version), 'rb'))
 
         self.lose_facts = list(self.lose_fact_dict.keys())
         self.lose_facts = [self.lose_facts[i] for i in np.argsort(list(self.lose_fact_dict.values()))]
@@ -349,19 +348,19 @@ class HippoRAG():
 
         self.docs_to_facts = pickle.load(open(
             'output/{}_{}_graph_doc_to_facts_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                          self.extraction_type, self.version), 'rb'))
+                                                                       self.extraction_type, self.version), 'rb'))
         self.facts_to_phrases = pickle.load(open(
             'output/{}_{}_graph_facts_to_phrases_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                              self.extraction_type, self.version), 'rb'))
+                                                                           self.extraction_type, self.version), 'rb'))
 
         self.docs_to_facts_mat = pickle.load(
             open(
                 'output/{}_{}_graph_doc_to_facts_csr_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                                  self.extraction_type, self.version),
+                                                                               self.extraction_type, self.version),
                 'rb'))  # (num docs, num facts)
         self.facts_to_phrases_mat = pickle.load(open(
             'output/{}_{}_graph_facts_to_phrases_csr_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                                  self.extraction_type, self.version),
+                                                                               self.extraction_type, self.version),
             'rb'))  # (num facts, num phrases)
 
         self.doc_to_phrases_mat = self.docs_to_facts_mat.dot(self.facts_to_phrases_mat)
@@ -369,10 +368,10 @@ class HippoRAG():
         self.phrase_to_num_doc = self.doc_to_phrases_mat.sum(0).T
 
         graph_file_path = 'output/{}_{}_graph_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type,
-                                                                                             str(self.sim_threshold), self.phrase_type,
-                                                                                             self.extraction_type,
-                                                                                             self.retrieval_model_name_processed,
-                                                                                             self.version)
+                                                                                          str(self.sim_threshold), self.phrase_type,
+                                                                                          self.extraction_type,
+                                                                                          self.retrieval_model_name_processed,
+                                                                                          self.version)
         if os.path.isfile(graph_file_path):
             self.graph_plus = pickle.load(open(graph_file_path, 'rb'))  # (phrase1 id, phrase2 id) -> the number of occurrences
 
@@ -418,8 +417,8 @@ class HippoRAG():
 
         if 'colbertv2' in self.retrieval_model_name:
             ranking_filename = 'output/{}_ranking_dict_{}_{}_{}.{}.p'.format(self.corpus_name, self.phrase_type,
-                                                                                self.extraction_type, self.retrieval_model_name_processed,
-                                                                                self.version)
+                                                                             self.extraction_type, self.retrieval_model_name_processed,
+                                                                             self.version)
 
             if os.path.exists(ranking_filename):
                 colbert_ranking_dict = pickle.load(open(ranking_filename, 'rb'))
@@ -462,7 +461,7 @@ class HippoRAG():
 
     def get_dpr_doc_embedding(self):
         cache_filename = 'data/lm_vectors/{}_mean/{}_doc_embeddings.p'.format(self.retrieval_model_name_processed,
-                                                                                 self.corpus_name)
+                                                                              self.corpus_name)
         if os.path.exists(cache_filename):
             self.doc_embedding_mat = pickle.load(open(cache_filename, 'rb'))
             print(f'Loaded doc embeddings from {cache_filename}, shape: {self.doc_embedding_mat.shape}')
@@ -599,51 +598,43 @@ class HippoRAG():
 
         return top_phrase_vec, {(query, self.phrases[phrase_id]): max_score for phrase_id, max_score, query in zip(phrase_ids, max_scores, query_ner_list)}
 
-    def named_entity_recognition(self, text: str, model_name='gpt-3.5-turbo-1106'):
+    def named_entity_recognition(self, text: str):
+        query_ner_prompts = ChatPromptTemplate.from_messages([SystemMessage("You're a very effective entity extraction system."),
+                                                              HumanMessage(query_prompt_one_shot_input),
+                                                              AIMessage(query_prompt_one_shot_output),
+                                                              HumanMessage(query_prompt_template.format(text))])
+        query_ner_messages = query_ner_prompts.format_prompt()
 
-        messages = [{'role': 'system', 'content': "You're a very effective entity extraction system."}]
-        messages.append({'role': 'user', 'content': query_prompt_one_shot_input})
-        messages.append({'role': 'assistant', 'content': query_prompt_one_shot_output})
-        messages.append({'role': 'user', 'content': query_prompt_template.format(text)})
-        # try:
+        if isinstance(client, ChatOpenAI):  # JSON mode
+            chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'], response_format={"type": "json_object"})
+            response_content = chat_completion.content
+        else:  # no JSON mode
+            chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'])
+            response_content = chat_completion.content
+            response_content = extract_json_dict(response_content)
 
-        if 'gpt' in model_name:
-            chat_completion = client.chat.completions.create(messages=messages, model=model_name, temperature=0, max_tokens=300, stop=['\n\n'], response_format={"type": "json_object"})
-            response_content = chat_completion.choices[0].message.content
-        else:
-            chat_completion = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=0,
-                max_tokens=300,
-                stop=['\n\n']
-            )
-            res = chat_completion.choices[0].message.content
-            response_content = extract_json_dict(res)
             try:
                 assert 'named_entities' in response_content
                 response_content = str(response_content)
-            except:
-                print('ERROR')
-                response_content = {'named_entities':[]}
+            except Exception as e:
+                print('Query NER exception', e)
+                response_content = {'named_entities': []}
 
-        total_tokens = chat_completion.usage.total_tokens
-        # except:
-        #     print(text)
-        #     return '',0
-
+        total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
         return response_content, total_tokens
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
+    parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
     parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo-1106')
-    parser.add_argument('--retrieval_model', type=str, choices=['facebook/contriever','colbertv2'])
+    parser.add_argument('--retrieval_model', type=str, choices=['facebook/contriever', 'colbertv2'])
     parser.add_argument('--doc_ensemble', type=bool, action='store_true')
     args = parser.parse_args()
 
-    hipporag = HippoRAG(args.dataset_name, args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble)
+    hipporag = HippoRAG(args.dataset_name, args.llm, args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble)
 
     queries = ["Which Stanford University professor works on Alzheimer's"]
     for query in queries:
-        ranks, scores, logs = hipporag.rank_docs(query,top_k=10)
+        ranks, scores, logs = hipporag.rank_docs(query, top_k=10)

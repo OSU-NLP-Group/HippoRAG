@@ -2,18 +2,20 @@ import sys
 
 sys.path.append('..')
 
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.prompts import ChatPromptTemplate
+
+from src.langchain_util import init_langchain_model
+
 from src.baselines.ircot import parse_prompt
 from src.qa.hotpotqa_evaluation import update_answer
 from src.qa.musique_evaluation import evaluate
 from src.qa.twowikimultihopqa_evaluation import exact_match_score, f1_score
 
-import time
-from src.llm_util import openai_completion, openai_chat_completion
 import os.path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import argparse
 import json
-from openai import OpenAI
 from tqdm import tqdm
 
 
@@ -34,60 +36,40 @@ cot_system_instruction_no_doc = ('As an advanced reading comprehension assistant
                                  'Conclude with "Answer: " to present a concise, definitive response, devoid of additional elaborations.')
 
 
-def qa_read(query: str, passages: list, few_shot: list, model: str, client: OpenAI):
+def qa_read(query: str, passages: list, few_shot: list, client):
     """
     :param query: query str
     :param passages: list of passages
     :return: answer from passages
     """
     instruction = cot_system_instruction if len(passages) else cot_system_instruction_no_doc
-    if model == 'gpt-3.5-turbo-instruct':
-        prompt_demo = ''
-        for sample in few_shot:
-            if 'document' in sample:
-                cur_sample = f'{sample["document"]}\n\nQuestion: {sample["question"]}\nThought: {sample["thought"]}\nAnswer: {sample["answer"]}\n\n'
-            else:
-                cur_sample = f'Question: {sample["question"]}\nThought: {sample["thought"]}\nAnswer: {sample["answer"]}\n\n'
-            prompt_demo += cur_sample
+    messages = [SystemMessage(instruction)]
+    for sample in few_shot:
+        if 'document' in sample:  # document and question from user
+            cur_sample = f'{sample["document"]}\n\nQuestion: {sample["question"]}'
+        else:  # no document, only question from user
+            cur_sample = f'Question: {sample["question"]}'
+        messages.append(HumanMessage(cur_sample + '\nThought: '))
+        messages.append(AIMessage(f'{sample["thought"]}\nAnswer: {sample["answer"]}'))
 
-        prompt_user = ''
-        for passage in passages:
-            prompt_user += f'Wikipedia Title: {passage}\n\n'
-        prompt_user += 'Question: ' + query + '\n'
+    user_prompt = ''
+    for passage in passages:
+        user_prompt += f'Wikipedia Title: {passage}\n\n'
+    user_prompt += 'Question: ' + query + '\nThought: '
+    messages.append(HumanMessage(user_prompt))
 
-        prompt = instruction + '\n\n' + prompt_demo.strip('\n') + '\n\n' + prompt_user
-        try:
-            response_content = openai_completion(prompt, client, model=model)
-            time.sleep(0.1)  # TPM is lower for Completion endpoint
-        except Exception as e:
-            print('QA read exception', e)
-            return ''
-    else:
-        messages = [{'role': 'system', 'content': instruction}]
-        for sample in few_shot:
-            if 'document' in sample:  # document and question from user
-                cur_sample = f'{sample["document"]}\n\nQuestion: {sample["question"]}'
-            else:  # no document, only question from user
-                cur_sample = f'Question: {sample["question"]}'
-            messages.append({'role': 'user', 'content': cur_sample + '\nThought: '})
-            messages.append({'role': 'assistant', 'content': f'{sample["thought"]}\nAnswer: {sample["answer"]}'})
-
-        user_prompt = ''
-        for passage in passages:
-            user_prompt += f'Wikipedia Title: {passage}\n\n'
-        user_prompt += 'Question: ' + query + '\nThought: '
-        messages.append({'role': 'user', 'content': user_prompt})
-
-        assert len(messages) == len(few_shot) * 2 + 2
-        try:
-            response_content = openai_chat_completion(messages, client, model=model, json_mode=False, seed=None)
-        except Exception as e:
-            print('QA read exception', e)
-            return ''
+    assert len(messages) == len(few_shot) * 2 + 2
+    messages = ChatPromptTemplate.from_messages(messages).format_prompt()
+    try:
+        chat_completion = client.invoke(messages.to_messages())
+        response_content = chat_completion.content
+    except Exception as e:
+        print('QA read exception', e)
+        return ''
     return response_content
 
 
-def parallel_qa_read(data: list, demos: list, args, client: OpenAI, output_path: str, total_metrics: dict, sample_id_set: set):
+def parallel_qa_read(data: list, demos: list, args, client, output_path: str, total_metrics: dict, sample_id_set: set):
     def process_sample(sample):
         sample_idx, sample = sample
         sample_id = sample['_id'] if '_id' in sample else sample['id']
@@ -110,7 +92,7 @@ def parallel_qa_read(data: list, demos: list, args, client: OpenAI, output_path:
         if args.dataset == 'hotpotqa':
             retrieved = [remove_newlines_after_first(item) for item in retrieved]
 
-        response = qa_read(query, retrieved, demos, args.llm, client)
+        response = qa_read(query, retrieved, demos, client)
         try:
             pred_ans = response.split('Answer:')[1].strip()
         except Exception as e:
@@ -153,14 +135,14 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, help='retrieval results or QA reading results', choices=['hotpotqa', 'musique', '2wikimultihopqa'], required=True)
     parser.add_argument('--data', type=str, help='retrieval results or QA reading results')
     parser.add_argument('--retriever', type=str, help='retriever name to distinguish different experiments')
-    parser.add_argument('--api_key', type=str, help='OpenAI API key')
-    parser.add_argument('--llm', type=str, default='gpt-3.5-turbo-1106', help='OpenAI model name')
+    parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
+    parser.add_argument('--llm_model', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
     parser.add_argument('--num_demo', type=int, default=1, help='the number of few-shot examples')
     parser.add_argument('--num_doc', type=int, default=5, help='the number of in-context documents')
     parser.add_argument('--thread', type=int, default=8, help='the number of workers for parallel processing')
     args = parser.parse_args()
 
-    output_path = f'exp/qa_{args.dataset}_{args.retriever}_{args.llm}_demo_{args.num_demo}_doc_{args.num_doc}.json'
+    output_path = f'exp/qa_{args.dataset}_{args.retriever}_{args.llm_model}_demo_{args.num_demo}_doc_{args.num_doc}.json'
     processed_id_set = set()
     total_metrics = {'qa_em': 0, 'qa_f1': 0, 'qa_precision': 0, 'qa_recall': 0}
     if args.data:
@@ -207,7 +189,7 @@ if __name__ == '__main__':
 
     assert data and len(data)
     demos = demos[:args.num_demo]
-    client = OpenAI(api_key=args.api_key, max_retries=5)
+    client = init_langchain_model(args.llm, args.llm_model)
     parallel_qa_read(data, demos, args, client, output_path, total_metrics, processed_id_set)
     with open(output_path, 'w') as f:
         json.dump(data, f)

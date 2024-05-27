@@ -17,7 +17,7 @@ pip install -r requirements.txt
 
 GPU_DEVICES=0,1,2,3 #Replace with your own free GPU Devices
 export OPENAI_API_KEY='Add your own OpenAI API key here.'
-export TOGETHER_API_KEY='Add your own TogetherAI API key here.'
+export TOGETHER_API_KEY='Add your own TogetherAI API key here.'  # If you need to use TogetherAI models such as Llama-3 API
 ```
 
 To use ColBERTv2, download the pre-trained [checkpoint](https://downloads.cs.stanford.edu/nlp/data/colbert/colbertv2/colbertv2.0.tar.gz) and put it under `exp/colbertv2.0`.
@@ -89,7 +89,7 @@ Once your corpus is created, add it under the `data` directory. We are now ready
 
 We will use the best hyperparameters defined in our paper and assume your dataset name is `sample`.
 
-#### Indexing with ColBERTv2 Synonymy Edges
+#### Indexing with ColBERTv2 for Synonymy Edges
 
 ```shell
 DATA=sample
@@ -100,7 +100,7 @@ GPUS=0,1,2,3
 bash src/setup_hipporag_colbert.sh $DATA $LLM $GPUS $SYNONYM_THRESH
 ```
 
-#### Indexing with HF Retrieval Encoder Synonymy Edges (i.e. Contriever)
+#### Indexing with HuggingFace Retrieval Encoder for Synonymy Edges (i.e. Contriever)
 
 ```shell
 DATA=sample
@@ -252,7 +252,7 @@ bash src/setup_hipporag_case_study.sh $GPU_DEVICES
 bash src/run_hipporag_case_study.sh
 ```
 
-After running these, you can explore the outputs inside the ```output/ircot/``` directory.
+After running these, you can explore the outputs inside the `output/ircot/` directory.
 
 
 ## TODO
@@ -278,5 +278,6 @@ If you find this work useful, please consider citing our paper:
       author={Bernal Jiménez Gutiérrez and Yiheng Shu and Yu Gu and Michihiro Yasunaga and Yu Su},
       journal={arXiv preprint arXiv:2405.14831},
       year={2024},
+      url={https://arxiv.org/abs/2405.14831}
 }
 ```
