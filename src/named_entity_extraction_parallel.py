@@ -1,9 +1,16 @@
 import argparse
-import os.path
-from together import Together
+from multiprocessing import Pool
+
+import numpy as np
+import pandas as pd
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
 from processing import *
-from openai import OpenAI
 from tqdm import tqdm
+
+from src.langchain_util import init_langchain_model
 
 query_prompt_one_shot_input = """Please extract all named entities that are important for solving the questions below.
 Place the named entities in json format.
@@ -20,59 +27,52 @@ Question: {}
 
 """
 
-def named_entity_recognition(text: str, model_name='gpt-3.5-turbo-1106'):
 
-    messages = [{'role': 'system', 'content': "You're a very effective entity extraction system."}]
-    messages.append({'role': 'user', 'content': query_prompt_one_shot_input})
-    messages.append({'role': 'assistant', 'content': query_prompt_one_shot_output})
-    messages.append({'role': 'user', 'content': query_prompt_template.format(text)})
-    # try:
+def named_entity_recognition(text: str):
+    query_ner_prompts = ChatPromptTemplate.from_messages([SystemMessage("You're a very effective entity extraction system."),
+                                                          HumanMessage(query_prompt_one_shot_input),
+                                                          AIMessage(query_prompt_one_shot_output),
+                                                          HumanMessage(query_prompt_template.format(text))])
+    query_ner_messages = query_ner_prompts.format_prompt()
 
-    if 'gpt' in model_name:
-        chat_completion = client.chat.completions.create(messages=messages, model=model_name, temperature=0, max_tokens=300, stop=['\n\n'], response_format={"type": "json_object"})
-        response_content = chat_completion.choices[0].message.content
-    else:
-        chat_completion = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            temperature=0,
-            max_tokens=300,
-            stop=['\n\n']
-        )
-        res = chat_completion.choices[0].message.content
-        response_content = extract_json_dict(res)
+    if isinstance(client, ChatOpenAI):  # JSON mode
+        chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'], response_format={"type": "json_object"})
+        response_content = chat_completion.content
+    else:  # no JSON mode
+        chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'])
+        response_content = chat_completion.content
+        response_content = extract_json_dict(response_content)
+
         try:
             assert 'named_entities' in response_content
             response_content = str(response_content)
-        except:
-            print('ERROR')
-            response_content = {'named_entities':[]}
+        except Exception as e:
+            print('Query NER exception', e)
+            response_content = {'named_entities': []}
 
-    total_tokens = chat_completion.usage.total_tokens
-    # except:
-    #     print(text)
-    #     return '',0
-
+    total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
     return response_content, total_tokens
+
 
 def run_ner_on_texts(texts):
     ner_output = []
     total_cost = 0
 
     for text in tqdm(texts):
-        ner, cost = named_entity_recognition(text, model_name)
+        ner, cost = named_entity_recognition(text)
         ner_output.append(ner)
         total_cost += cost
 
     return ner_output, total_cost
 
-import sys
 
 if __name__ == '__main__':
     # Get the first argument
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
-    parser.add_argument('--model_name',type=str)
+    parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
+    parser.add_argument('--model_name', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
+    parser.add_argument('--num_processes', type=int, default=10, help='Number of processes')
 
     args = parser.parse_args()
 
@@ -81,13 +81,7 @@ if __name__ == '__main__':
 
     output_file = 'output/{}_queries.named_entity_output.tsv'.format(dataset)
 
-    if 'gpt' in model_name:
-        client = OpenAI()
-    else:
-        # set TOGETHER_API_KEY environment variable before running this function
-        client = Together(api_key=os.environ.get("TOGETHER_API_KEY"))
-
-    ## Extract Entities from Queries
+    client = init_langchain_model(args.llm, model_name)  # LangChain model
 
     try:
         queries_df = pd.read_json(f'data/{dataset}.json')
@@ -108,7 +102,7 @@ if __name__ == '__main__':
         if len(queries_df) != len(output_df):
             queries = queries_df[query_name].values
 
-            num_processes = 10
+            num_processes = args.num_processes
 
             splits = np.array_split(range(len(queries)), num_processes)
 
@@ -117,8 +111,11 @@ if __name__ == '__main__':
             for split in splits:
                 args.append([queries[i] for i in split])
 
-            with Pool(processes=num_processes) as pool:
-                outputs = pool.map(run_ner_on_texts, args)
+            if num_processes == 1:
+                outputs = [run_ner_on_texts(args[0])]
+            else:
+                with Pool(processes=num_processes) as pool:
+                    outputs = pool.map(run_ner_on_texts, args)
 
             chatgpt_total_tokens = 0
 
@@ -131,8 +128,8 @@ if __name__ == '__main__':
             current_cost = 0.002 * chatgpt_total_tokens / 1000
 
             queries_df['triples'] = query_triples
-            queries_df.to_csv(output_file,sep='\t')
+            queries_df.to_csv(output_file, sep='\t')
         else:
             pass
-    except:
-        print('No queries will be processed for later retrieval.')
+    except Exception as e:
+        print('No queries will be processed for later retrieval.', e)

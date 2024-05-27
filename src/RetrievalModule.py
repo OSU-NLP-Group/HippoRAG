@@ -2,7 +2,6 @@ import _pickle as pickle
 import argparse
 from glob import glob
 import os.path
-import sys
 
 import pandas as pd
 
@@ -12,12 +11,8 @@ import os
 from tqdm import tqdm
 import torch
 
-import copy
 import faiss
 import gc
-import subprocess
-import time
-import ipdb
 
 from transformers import AutoModel, AutoTokenizer
 from processing import *
@@ -25,10 +20,12 @@ from processing import *
 # TODO: Change hard-coded vector output directory
 VECTOR_DIR = 'data/lm_vectors'
 
+
 def mean_pooling(token_embeddings, mask):
     token_embeddings = token_embeddings.masked_fill(~mask[..., None].bool(), 0.)
     sentence_embeddings = token_embeddings.sum(dim=1) / mask.sum(dim=1)[..., None]
     return sentence_embeddings
+
 
 class RetrievalModule:
     """
@@ -39,7 +36,7 @@ class RetrievalModule:
                  retriever_name,
                  string_filename,
                  pool_method='cls'
-                ):
+                 ):
         """
         Args:
             retriever_name: Retrieval names can be one of 3 types
@@ -48,7 +45,7 @@ class RetrievalModule:
         """
 
         self.retriever_name = retriever_name
-        
+
         self.retrieval_name_dir = None
 
         # Search for pickle file
@@ -63,26 +60,26 @@ class RetrievalModule:
             assert False, print('{} is an invalid retriever name. Check Documentation.'.format(retriever_name))
 
         # If not pre-computed, create vectors
-        self.retrieval_name_dir = VECTOR_DIR + '/' + self.retriever_name.replace('/', '_').replace('.','') + '_' + pool_method
+        self.retrieval_name_dir = VECTOR_DIR + '/' + self.retriever_name.replace('/', '_').replace('.', '') + '_' + pool_method
 
         if not (os.path.exists(self.retrieval_name_dir)):
             os.makedirs(self.retrieval_name_dir)
 
-        #Get previously computed vectors
+        # Get previously computed vectors
         precomp_strings, precomp_vectors = self.get_precomputed_plm_vectors(self.retrieval_name_dir)
 
-        #Get AUI Strings to be Encoded
+        # Get AUI Strings to be Encoded
         string_df = pd.read_csv(string_filename, sep='\t')
         string_df.strings = [processing_phrases(str(s)) for s in string_df.strings]
         sorted_df = self.create_sorted_df(string_df.strings.values)
 
-        #Identify Missing Strings
+        # Identify Missing Strings
         missing_strings = self.find_missing_strings(sorted_df.strings.unique(), precomp_strings)
 
-        #Encode Missing Strings
+        # Encode Missing Strings
         if len(missing_strings) > 0:
             print('Encoding {} Missing Strings'.format(len(missing_strings)))
-            new_vectors, new_strings,  = self.encode_strings(missing_strings, pool_method)
+            new_vectors, new_strings, = self.encode_strings(missing_strings, pool_method)
 
             precomp_strings = list(precomp_strings)
             precomp_vectors = list(precomp_vectors)
@@ -97,13 +94,13 @@ class RetrievalModule:
         self.vector_dict = self.make_dictionary(sorted_df, precomp_strings, precomp_vectors)
 
         print('Vectors Loaded.')
-        
+
         queries = string_df[string_df.type == 'query']
         kb = string_df[string_df.type == 'kb']
-        
+
         nearest_neighbors = self.retrieve_knn(queries.strings.values, kb.strings.values)
-        pickle.dump(nearest_neighbors,open(self.retrieval_name_dir+'/nearest_neighbor_{}.p'.format(string_filename.split('/')[1].split('.')[0]), 'wb'))
-        
+        pickle.dump(nearest_neighbors, open(self.retrieval_name_dir + '/nearest_neighbor_{}.p'.format(string_filename.split('/')[1].split('.')[0]), 'wb'))
+
     def get_precomputed_plm_vectors(self, retrieval_name_dir):
 
         # Load or Create a DataFrame sorted by phrase length for efficient PLM computation
@@ -120,33 +117,33 @@ class RetrievalModule:
 
         lengths_df = pd.DataFrame(lengths)
         lengths_df['strings'] = strings
-        
+
         return lengths_df.sort_values(0)
 
     def save_vecs(self, strings, vectors, direc_name, bin_size=50000):
 
-        with open(direc_name+'/encoded_strings.txt','w') as f:
+        with open(direc_name + '/encoded_strings.txt', 'w') as f:
             for string in strings:
-                f.write(string+'\n')
+                f.write(string + '\n')
 
-        split_vecs = np.array_split(vectors, int(len(vectors)/bin_size)+1)
+        split_vecs = np.array_split(vectors, int(len(vectors) / bin_size) + 1)
 
         for i, vecs in tqdm(enumerate(split_vecs)):
-            pickle.dump(vecs,open(direc_name+'/vecs_{}.p'.format(i), 'wb'))
-        
+            pickle.dump(vecs, open(direc_name + '/vecs_{}.p'.format(i), 'wb'))
+
     def load_precomp_strings(self, retrieval_name_dir):
         filename = retrieval_name_dir + '/encoded_strings.txt'
 
-        if not(os.path.exists(filename)):
+        if not (os.path.exists(filename)):
             return []
 
-        with open(filename,'r') as f:
+        with open(filename, 'r') as f:
             lines = f.readlines()
             lines = [l.strip() for l in lines]
-            
+
         return lines
 
-    def load_plm_vectors(self,retrieval_name_dir):
+    def load_plm_vectors(self, retrieval_name_dir):
         vectors = []
 
         print('Loading PLM Vectors.')
@@ -179,8 +176,8 @@ class RetrievalModule:
             precomp_string_ids[string] = i
 
         vector_dict = {}
-        
-        for i, row in tqdm(sorted_df.iterrows(),total=len(sorted_df)):
+
+        for i, row in tqdm(sorted_df.iterrows(), total=len(sorted_df)):
             string = row.strings
 
             try:
@@ -190,20 +187,19 @@ class RetrievalModule:
                 ipdb.set_trace()
 
         return vector_dict
-    
 
     def encode_strings(self, strs_to_encode, pool_method):
         self.plm.to('cuda')
         tokenizer = AutoTokenizer.from_pretrained(self.retriever_name)
 
-        #Sorting Strings by length
+        # Sorting Strings by length
         sorted_missing_strings = [len(s) for s in strs_to_encode]
         strs_to_encode = list(np.array(strs_to_encode)[np.argsort(sorted_missing_strings)])
-        
+
         all_cls = []
         all_strings = []
         num_strings_proc = 0
-        
+
         with torch.no_grad():
 
             batch_sizes = []
@@ -211,7 +207,7 @@ class RetrievalModule:
             text_batch = []
             max_pad_size = 0
 
-            for i, string in tqdm(enumerate(strs_to_encode),total=len(strs_to_encode)):
+            for i, string in tqdm(enumerate(strs_to_encode), total=len(strs_to_encode)):
 
                 length = len(tokenizer.tokenize(string))
 
@@ -233,10 +229,10 @@ class RetrievalModule:
                     attention_mask = attention_mask.to('cuda')
 
                     outputs = self.plm(input_ids, attention_mask=attention_mask)
-                    
+
                     if pool_method == 'cls':
                         embeddings = outputs[0][:, 0, :]
-                        
+
                     elif pool_method == 'mean':
                         embeddings = mean_pooling(outputs[0], attention_mask)
 
@@ -254,12 +250,12 @@ class RetrievalModule:
         assert all([all_strings[i] == strs_to_encode[i] for i in range(len(all_strings))])
 
         return all_cls, all_strings
-                        
+
     def retrieve_knn(self, queries, knowledge_base, k=2047):
-                
+
         original_vecs = []
         new_vecs = []
-        
+
         for string in knowledge_base:
             original_vecs.append(self.vector_dict[string])
 
@@ -277,7 +273,7 @@ class RetrievalModule:
 
         faiss.normalize_L2(original_vecs)
         faiss.normalize_L2(new_vecs)
-            
+
         # Preparing Data for k-NN Algorithm
         print('Chunking')
 
@@ -329,7 +325,7 @@ class RetrievalModule:
 
             current_zero_index += len(index_chunk)
 
-#             print(subprocess.check_output(['nvidia-smi']))
+            #             print(subprocess.check_output(['nvidia-smi']))
 
             del gpu_index
             del gpu_resources
@@ -358,10 +354,10 @@ class RetrievalModule:
         full_sort_D = []
 
         for d, i in tqdm(zip(stacked_D, stacked_I)):
-            sort_indices = np.argsort(d,kind='stable')
+            sort_indices = np.argsort(d, kind='stable')
 
             sort_indices = sort_indices[::-1]
-                
+
             i = i[sort_indices][:k]
             d = d[sort_indices][:k]
 
@@ -374,28 +370,27 @@ class RetrievalModule:
 
         sorted_candidate_dictionary = {}
 
-        for new_index, nn_info in tqdm(enumerate(zip(full_sort_I,full_sort_D))):
+        for new_index, nn_info in tqdm(enumerate(zip(full_sort_I, full_sort_D))):
             nn_inds, nn_dists = nn_info
             nns = [knowledge_base[i] for i in nn_inds]
 
             sorted_candidate_dictionary[queries[new_index]] = (nns, nn_dists)
 
         return sorted_candidate_dictionary
-    
-    
+
+
 import sys
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--retriever_name', type=str)
-    parser.add_argument('--string_filename',type=str)
-    parser.add_argument('--pool_method', type=str,default='mean')
+    parser.add_argument('--string_filename', type=str)
+    parser.add_argument('--pool_method', type=str, default='mean')
 
     args = parser.parse_args()
 
     retriever_name = args.retriever_name
     string_filename = args.string_filename
     pool_method = args.pool_method
-
 
     retrieval_module = RetrievalModule(retriever_name, string_filename, pool_method)

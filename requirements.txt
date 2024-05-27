@@ -134,3 +134,7 @@ Werkzeug==3.0.1
 xxhash==3.4.1
 yarl==1.9.4
 zipp==3.17.0
+langchain
+langchain-openai
+langchain-together
+langchain_community
