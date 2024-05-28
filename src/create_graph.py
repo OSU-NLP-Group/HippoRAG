@@ -1,9 +1,13 @@
+import copy
+
 import ipdb
+import numpy as np
 import pandas as pd
-from scipy.sparse import csr_array 
+from scipy.sparse import csr_array
 from processing import *
 from glob import glob
 from nltk.corpus import stopwords
+
 stop_words = set(stopwords.words('english'))
 import os
 import json
@@ -13,18 +17,16 @@ import argparse
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
-import sys
-
 if __name__ == '__main__':
     # Get the first argument
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
-    parser.add_argument('--model_name',type=str)
-    parser.add_argument('--extraction_model',type=str)
-    parser.add_argument('--threshold',type=float)
-    parser.add_argument('--create_graph_flag',action='store_true')
-    parser.add_argument('--extraction_type',type=str)
-    parser.add_argument('--cosine_sim_edges',action='store_true')
+    parser.add_argument('--model_name', type=str)
+    parser.add_argument('--extraction_model', type=str)
+    parser.add_argument('--threshold', type=float)
+    parser.add_argument('--create_graph_flag', action='store_true')
+    parser.add_argument('--extraction_type', type=str)
+    parser.add_argument('--cosine_sim_edges', action='store_true')
 
     args = parser.parse_args()
 
@@ -49,7 +51,7 @@ if __name__ == '__main__':
     extracted_triples = extracted_file['docs']
 
     if extraction_model != 'gpt-3.5-turbo-1106':
-        extraction_type = extraction_type + '_' +extraction_model
+        extraction_type = extraction_type + '_' + extraction_model
 
     phrase_type = 'ents_only_lower_preprocess'
 
@@ -72,8 +74,7 @@ if __name__ == '__main__':
 
     correct_wiki_format = 0
 
-
-    for i, row in tqdm(enumerate(extracted_triples),total=len(extracted_triples)):
+    for i, row in tqdm(enumerate(extracted_triples), total=len(extracted_triples)):
 
         document = row['passage']
         raw_ner_entities = row['extracted_entities']
@@ -87,7 +88,7 @@ if __name__ == '__main__':
         unclean_triples = []
         doc_entities = set()
 
-        #Populate Triples from OpenIE
+        # Populate Triples from OpenIE
         for triple in triples:
 
             triple = [str(s) for s in triple]
@@ -123,7 +124,7 @@ if __name__ == '__main__':
                     entity_neighborhood.add((raw_head_ent, triple[1], raw_tail_ent))
                     full_neighborhoods[raw_tail_ent] = entity_neighborhood
 
-                    for triple_entity in [clean_triple[0],clean_triple[2]]:
+                    for triple_entity in [clean_triple[0], clean_triple[2]]:
                         entities.append(triple_entity)
                         doc_entities.add(triple_entity)
 
@@ -151,7 +152,7 @@ if __name__ == '__main__':
 
         queries_full = queries_full.loc[questions]
     except:
-        queries_full = pd.DataFrame([],columns=['question','triples'])
+        queries_full = pd.DataFrame([], columns=['question', 'triples'])
 
     q_entities = []
     q_entities_by_doc = []
@@ -172,46 +173,46 @@ if __name__ == '__main__':
     all_phrases = copy.deepcopy(unique_phrases)
     all_phrases.extend(q_phrases)
 
-    kb = pd.DataFrame(unique_phrases,columns=['strings'])
+    kb = pd.DataFrame(unique_phrases, columns=['strings'])
     kb2 = copy.deepcopy(kb)
 
     kb['type'] = 'query'
     kb2['type'] = 'kb'
 
-    kb_full = pd.concat([kb,kb2])
-    kb_full.to_csv('output/kb_to_kb.tsv',sep='\t')
+    kb_full = pd.concat([kb, kb2])
+    kb_full.to_csv('output/kb_to_kb.tsv', sep='\t')
 
-    rel_kb = pd.DataFrame(unique_relations,columns=['strings'])
+    rel_kb = pd.DataFrame(unique_relations, columns=['strings'])
     rel_kb2 = copy.deepcopy(rel_kb)
 
     rel_kb['type'] = 'query'
     rel_kb2['type'] = 'kb'
 
-    rel_kb_full = pd.concat([rel_kb,rel_kb2])
-    rel_kb_full.to_csv('output/rel_kb_to_kb.tsv',sep='\t')
+    rel_kb_full = pd.concat([rel_kb, rel_kb2])
+    rel_kb_full.to_csv('output/rel_kb_to_kb.tsv', sep='\t')
 
-    query_df = pd.DataFrame(q_phrases,columns=['strings'])
+    query_df = pd.DataFrame(q_phrases, columns=['strings'])
 
     query_df['type'] = 'query'
     kb['type'] = 'kb'
 
-    kb_query = pd.concat([kb,query_df])
-    kb_query.to_csv('output/query_to_kb.tsv',sep='\t')
+    kb_query = pd.concat([kb, query_df])
+    kb_query.to_csv('output/query_to_kb.tsv', sep='\t')
 
     if create_graph_flag:
         print('Creating Graph')
 
-        node_json = [{'idx':i, 'name':p} for i,p in enumerate(unique_phrases)]
+        node_json = [{'idx': i, 'name': p} for i, p in enumerate(unique_phrases)]
         kb_phrase_df = pd.DataFrame(unique_phrases)
-        kb_phrase_dict = {p:i for i,p in enumerate(unique_phrases)}
+        kb_phrase_dict = {p: i for i, p in enumerate(unique_phrases)}
 
         lose_facts = []
 
         for triples in triple_tuples:
             lose_facts.extend([tuple(t) for t in triples])
 
-        lose_fact_dict = {f:i for i,f in enumerate(lose_facts)}
-        fact_json = [{'idx':i, 'head':t[0], 'relation':t[1], 'tail':t[2]} for i,t in enumerate(lose_facts)]
+        lose_fact_dict = {f: i for i, f in enumerate(lose_facts)}
+        fact_json = [{'idx': i, 'head': t[0], 'relation': t[1], 'tail': t[2]} for i, t in enumerate(lose_facts)]
 
         json.dump(passage_json, open('output/{}_{}_graph_passage_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
         json.dump(node_json, open('output/{}_{}_graph_nodes_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
@@ -222,20 +223,20 @@ if __name__ == '__main__':
 
         graph_json = {}
 
-        docs_to_facts = {} #Num Docs x Num Facts (66k x 695k)
-        facts_to_phrases = {} #Num Facts x Num Phrases (695k x 786k)
-        graph = {} #Num Phrases x Num Phrases (786k x 786k)
+        docs_to_facts = {}  # Num Docs x Num Facts (66k x 695k)
+        facts_to_phrases = {}  # Num Facts x Num Phrases (695k x 786k)
+        graph = {}  # Num Phrases x Num Phrases (786k x 786k)
 
         num_triple_edges = 0
         num_doc_edges = 0
 
-        #Creating Adjacency and Document to Phrase Matrices
-        for doc_id, triples in tqdm(enumerate(triple_tuples),total=len(triple_tuples)):
+        # Creating Adjacency and Document to Phrase Matrices
+        for doc_id, triples in tqdm(enumerate(triple_tuples), total=len(triple_tuples)):
 
             doc_phrases = []
             fact_edges = []
 
-            #Iterate over triples
+            # Iterate over triples
             for triple in triples:
                 triple = tuple(triple)
 
@@ -243,9 +244,9 @@ if __name__ == '__main__':
 
                 if len(triple) == 3:
                     relation = triple[1]
-                    triple = np.array(triple)[[0,2]]
+                    triple = np.array(triple)[[0, 2]]
 
-                    docs_to_facts[(doc_id,fact_id)] = 1
+                    docs_to_facts[(doc_id, fact_id)] = 1
 
                     for i, phrase in enumerate(triple):
                         phrase_id = kb_phrase_dict[phrase]
@@ -253,7 +254,7 @@ if __name__ == '__main__':
 
                         facts_to_phrases[(fact_id, phrase_id)] = 1
 
-                        for phrase2 in triple[i+1:]:
+                        for phrase2 in triple[i + 1:]:
                             phrase2_id = kb_phrase_dict[phrase2]
 
                             fact_edge_r = (phrase_id, phrase2_id)
@@ -266,12 +267,12 @@ if __name__ == '__main__':
                             graph[fact_edge_l] = graph.get(fact_edge_l, 0.0) + inter_triple_weight
 
                             phrase_edges = graph_json.get(phrase, {})
-                            edge = phrase_edges.get(phrase2,('triple',0))
+                            edge = phrase_edges.get(phrase2, ('triple', 0))
                             phrase_edges[phrase2] = ('triple', edge[1] + 1)
                             graph_json[phrase] = phrase_edges
 
                             phrase_edges = graph_json.get(phrase2, {})
-                            edge = phrase_edges.get(phrase,('triple',0))
+                            edge = phrase_edges.get(phrase, ('triple', 0))
                             phrase_edges[phrase] = ('triple', edge[1] + 1)
                             graph_json[phrase2] = phrase_edges
 
@@ -280,11 +281,14 @@ if __name__ == '__main__':
         pickle.dump(docs_to_facts, open('output/{}_{}_graph_doc_to_facts_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
         pickle.dump(facts_to_phrases, open('output/{}_{}_graph_facts_to_phrases_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
 
-        docs_to_facts_mat = csr_array(([int(v) for v in docs_to_facts.values()], ([int(e[0]) for e in docs_to_facts.keys()], [int(e[1]) for e in docs_to_facts.keys()])), shape=(len(triple_tuples), len(lose_facts)))
-        facts_to_phrases_mat = csr_array(([int(v) for v in facts_to_phrases.values()], ([e[0] for e in facts_to_phrases.keys()], [e[1] for e in facts_to_phrases.keys()])), shape=(len(lose_facts), len(unique_phrases)))
+        docs_to_facts_mat = csr_array(([int(v) for v in docs_to_facts.values()], ([int(e[0]) for e in docs_to_facts.keys()], [int(e[1]) for e in docs_to_facts.keys()])),
+                                      shape=(len(triple_tuples), len(lose_facts)))
+        facts_to_phrases_mat = csr_array(([int(v) for v in facts_to_phrases.values()], ([e[0] for e in facts_to_phrases.keys()], [e[1] for e in facts_to_phrases.keys()])),
+                                         shape=(len(lose_facts), len(unique_phrases)))
 
         pickle.dump(docs_to_facts_mat, open('output/{}_{}_graph_doc_to_facts_csr_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
-        pickle.dump(facts_to_phrases_mat, open('output/{}_{}_graph_facts_to_phrases_csr_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
+        pickle.dump(facts_to_phrases_mat,
+                    open('output/{}_{}_graph_facts_to_phrases_csr_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
 
         pickle.dump(graph, open('output/{}_{}_graph_fact_doc_edges_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
 
@@ -301,23 +305,23 @@ if __name__ == '__main__':
 
             graph_plus = copy.deepcopy(graph)
 
-            kb_similarity = {processing_phrases(k):v for k,v in kb_similarity.items()}
+            kb_similarity = {processing_phrases(k): v for k, v in kb_similarity.items()}
 
             synonym_candidates = []
 
-            for phrase in tqdm(kb_similarity.keys(),total=len(kb_similarity)):
+            for phrase in tqdm(kb_similarity.keys(), total=len(kb_similarity)):
 
                 synonyms = []
 
-                if len(re.sub('[^A-Za-z0-9]','',phrase)) > 2:
-                    phrase_id = kb_phrase_dict.get(phrase,None)
+                if len(re.sub('[^A-Za-z0-9]', '', phrase)) > 2:
+                    phrase_id = kb_phrase_dict.get(phrase, None)
 
                     if phrase_id is not None:
 
                         nns = kb_similarity[phrase]
 
                         num_nns = 0
-                        for nn, score in zip(nns[0],nns[1]):
+                        for nn, score in zip(nns[0], nns[1]):
                             nn = processing_phrases(nn)
                             if score < threshold or num_nns > 100:
                                 break
@@ -330,7 +334,7 @@ if __name__ == '__main__':
                                     phrase2 = nn
 
                                     sim_edge = (phrase_id, phrase2_id)
-                                    synonyms.append((nn,score))
+                                    synonyms.append((nn, score))
 
                                     relations[(phrase, phrase2)] = 'equivalent'
                                     graph_plus[sim_edge] = similarity_max * score
@@ -338,40 +342,45 @@ if __name__ == '__main__':
                                     num_nns += 1
 
                                     phrase_edges = graph_json.get(phrase, {})
-                                    edge = phrase_edges.get(phrase2,('similarity',0))
+                                    edge = phrase_edges.get(phrase2, ('similarity', 0))
                                     if edge[0] == 'similarity':
                                         phrase_edges[phrase2] = ('similarity', edge[1] + score)
                                         graph_json[phrase] = phrase_edges
 
                 synonym_candidates.append((phrase, synonyms))
 
-            pickle.dump(synonym_candidates, open('output/{}_similarity_edges_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, threshold, phrase_type, extraction_type, processed_model_name, version), 'wb'))
+            pickle.dump(synonym_candidates, open(
+                'output/{}_similarity_edges_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, threshold, phrase_type, extraction_type, processed_model_name, version), 'wb'))
         else:
             graph_plus = graph
 
-        pickle.dump(relations, open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, processed_model_name, version), 'wb'))
+        pickle.dump(relations,
+                    open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, processed_model_name, version), 'wb'))
 
         print('Saving Graph')
 
         synonymy_edges = set([edge for edge in relations.keys() if relations[edge] == 'equivalent'])
 
-        stat_df = [('Total Phrases',len(phrases)),
-        ('Unique Phrases', len(unique_phrases)),
-        ('Number of Individual Triples', len(lose_facts)),
-        ('Number of Incorrectly Formatted Triples (ChatGPT Error)', len(incorrectly_formatted_triples)),
-        ('Number of Triples w/o NER Entities (ChatGPT Error)', len(triples_wo_ner_entity)),
-        ('Number of Unique Individual Triples', len(lose_fact_dict)),
-        ('Number of Entities', len(entities)),
-        ('Number of Relations', len(relations)),
-        ('Number of Unique Entities', len(np.unique(entities))),
-        ('Number of Synonymy Edges', len(synonymy_edges)),
-        ('Number of Unique Relations', len(unique_relations))]
+        stat_df = [('Total Phrases', len(phrases)),
+                   ('Unique Phrases', len(unique_phrases)),
+                   ('Number of Individual Triples', len(lose_facts)),
+                   ('Number of Incorrectly Formatted Triples (ChatGPT Error)', len(incorrectly_formatted_triples)),
+                   ('Number of Triples w/o NER Entities (ChatGPT Error)', len(triples_wo_ner_entity)),
+                   ('Number of Unique Individual Triples', len(lose_fact_dict)),
+                   ('Number of Entities', len(entities)),
+                   ('Number of Relations', len(relations)),
+                   ('Number of Unique Entities', len(np.unique(entities))),
+                   ('Number of Synonymy Edges', len(synonymy_edges)),
+                   ('Number of Unique Relations', len(unique_relations))]
 
         print(pd.DataFrame(stat_df).set_index(0))
 
         if similarity_max == 1.0:
-            pickle.dump(graph_plus, open('output/{}_{}_graph_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, threshold, phrase_type, extraction_type, processed_model_name, version), 'wb'))
+            pickle.dump(graph_plus, open(
+                'output/{}_{}_graph_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, threshold, phrase_type, extraction_type, processed_model_name, version), 'wb'))
         else:
-            pickle.dump(graph_plus, open('output/{}_{}_graph_mean_{}_thresh_{}_{}_sim_max_{}_{}.{}.subset.p'.format(dataset, graph_type, threshold, phrase_type, extraction_type, similarity_max, processed_model_name, version), 'wb'))
+            pickle.dump(graph_plus, open(
+                'output/{}_{}_graph_mean_{}_thresh_{}_{}_sim_max_{}_{}.{}.subset.p'.format(dataset, graph_type, threshold, phrase_type, extraction_type, similarity_max,
+                                                                                           processed_model_name, version), 'wb'))
 
         json.dump(graph_json, open('output/{}_{}_graph_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))

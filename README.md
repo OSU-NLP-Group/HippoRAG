@@ -83,6 +83,11 @@ The corpus and optional query JSON files should have the following format:
 ]
 ```
 
+### Integration with LangChain
+
+This codebase calls LLM through [LangChain](https://www.langchain.com/), which makes it easier for HippoRAG to call different online LLM APIs or offline LLM deployments.
+See `src/langchain_util.py` to see how we set OpenAI and TogetherAI for our experiments. You could also set up your LLM choices using LangChain, e.g., [Ollama](https://python.langchain.com/v0.1/docs/integrations/chat/ollama/) supports **local** Llama, Gemma and Mistral models. 
+
 ### Indexing
 
 Once your corpus is created, add it under the `data` directory. We are now ready to start indexing using the commands below.
@@ -96,8 +101,9 @@ DATA=sample
 LLM=gpt-3.5-turbo-1106
 SYNONYM_THRESH=0.8
 GPUS=0,1,2,3
+LLM_API=openai # LLM API provider e.g., 'openai', 'together', see 'src/langchain_util.py'
 
-bash src/setup_hipporag_colbert.sh $DATA $LLM $GPUS $SYNONYM_THRESH
+bash src/setup_hipporag_colbert.sh $DATA $LLM $GPUS $SYNONYM_THRESH $LLM_API
 ```
 
 #### Indexing with HuggingFace Retrieval Encoder for Synonymy Edges (i.e. Contriever)
@@ -108,8 +114,9 @@ HF_RETRIEVER=facebook/contriever
 LLM=gpt-3.5-turbo-1106
 SYNONYM_THRESH=0.8
 GPUS=0,1,2,3
+LLM_API=openai # LLM API provider e.g., 'openai', 'together', see 'src/langchain_util.py'
 
-bash src/setup_hipporag.sh $DATA $HF_RETRIEVER $LLM $GPUS $SYNONYM_THRESH
+bash src/setup_hipporag.sh $DATA $HF_RETRIEVER $LLM $GPUS $SYNONYM_THRESH $LLM_API
 ```
 
 ### Retrieval
@@ -126,7 +133,7 @@ ColBERTv2
 ```shell
 RETRIEVER=colbertv2
 
-python3 src/ircot_hipporag.py --dataset $DATA --retriever $RETRIEVER --llm $LLM --max_steps 1 --doc_ensemble f --top_k 10  --sim_threshold $SYNONYM_THRESH --damping 0.5
+python3 src/ircot_hipporag.py --dataset $DATA --retriever $RETRIEVER --llm $LLM_API --llm_model $LLM --max_steps 1 --doc_ensemble f --top_k 10  --sim_threshold $SYNONYM_THRESH --damping 0.5
 ```
 
 Huggingface Model (i.e. Contriever)
@@ -134,7 +141,7 @@ Huggingface Model (i.e. Contriever)
 ```shell
 RETRIEVER=$HF_RETRIEVER
 
-python3 src/ircot_hipporag.py --dataset $DATA --retriever $RETRIEVER --llm $LLM --max_steps 1 --doc_ensemble f --top_k 10  --sim_threshold $SYNONYM_THRESH --damping 0.5
+python3 src/ircot_hipporag.py --dataset $DATA --retriever $RETRIEVER --llm $LLM_API --llm_model $LLM --max_steps 1 --doc_ensemble f --top_k 10 --sim_threshold $SYNONYM_THRESH --damping 0.5
 ```
 
 **Note:** In this setting, you can couple HippoRAG with IRCoT for complementary improvements. To run this, just change the `--max_steps` parameter above to the desired maximum number of LLM reasoning steps. Additionally, be sure to make a directory with your dataset's name under `data/ircot_prompt/` and add a file named `gold_with_3_distractors_context_cot_qa_codex.txt` with IRCoT prompts appropriate for your dataset. Check out the other datasets' IRCoT prompts for formatting and content inspiration.
@@ -200,7 +207,7 @@ After running indexing, run the following bash scripts to test both single-step 
 
 ##### HippoRAG Only
 ```shell
-bash src/run_hipporag_main_exps.sh```
+bash src/run_hipporag_main_exps.sh
 ```
 
 ##### HippoRAG w/ IRCoT

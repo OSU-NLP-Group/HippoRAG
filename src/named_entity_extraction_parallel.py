@@ -1,3 +1,9 @@
+import sys
+
+from langchain_community.chat_models import ChatOllama
+
+sys.path.append('.')
+
 import argparse
 from multiprocessing import Pool
 
@@ -35,14 +41,23 @@ def named_entity_recognition(text: str):
                                                           HumanMessage(query_prompt_template.format(text))])
     query_ner_messages = query_ner_prompts.format_prompt()
 
+    json_mode = False
     if isinstance(client, ChatOpenAI):  # JSON mode
         chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'], response_format={"type": "json_object"})
         response_content = chat_completion.content
+        total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
+        json_mode = True
+    elif isinstance(client, ChatOllama):
+        response_content = client.invoke(query_ner_messages.to_messages())
+        response_content = extract_json_dict(response_content)
+        total_tokens = len(response_content.split())
     else:  # no JSON mode
         chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'])
         response_content = chat_completion.content
         response_content = extract_json_dict(response_content)
+        total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
 
+    if not json_mode:
         try:
             assert 'named_entities' in response_content
             response_content = str(response_content)
@@ -50,7 +65,6 @@ def named_entity_recognition(text: str):
             print('Query NER exception', e)
             response_content = {'named_entities': []}
 
-    total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
     return response_content, total_tokens
 
 
@@ -129,7 +143,8 @@ if __name__ == '__main__':
 
             queries_df['triples'] = query_triples
             queries_df.to_csv(output_file, sep='\t')
+            print('Passage NER saved to', output_file)
         else:
-            pass
+            print('Passage NER already saved to', output_file)
     except Exception as e:
         print('No queries will be processed for later retrieval.', e)
