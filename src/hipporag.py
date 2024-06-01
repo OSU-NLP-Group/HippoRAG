@@ -608,15 +608,15 @@ class HippoRAG():
                                                               HumanMessage(query_prompt_template.format(text))])
         query_ner_messages = query_ner_prompts.format_prompt()
         json_mode = False
-        if isinstance(client, ChatOpenAI):  # JSON mode
-            chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'], response_format={"type": "json_object"})
+        if isinstance(self.client, ChatOpenAI):  # JSON mode
+            chat_completion = self.client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'], response_format={"type": "json_object"})
             response_content = chat_completion.content
             total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
             json_mode = True
-        elif isinstance(client, ChatOllama):
-            response_content = client.invoke(query_ner_messages.to_messages())
+        elif isinstance(self.client, ChatOllama):
+            response_content = self.client.invoke(query_ner_messages.to_messages())
         else:  # no JSON mode
-            chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'])
+            chat_completion = self.client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'])
             response_content = chat_completion.content
             response_content = extract_json_dict(response_content)
             total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
