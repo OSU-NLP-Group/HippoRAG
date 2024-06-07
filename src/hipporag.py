@@ -125,12 +125,12 @@ class HippoRAG:
     def rank_docs(self, query: str, top_k=10):
         """
         Rank documents based on the query
-        :param query: the input phrase
-        :param damping: damping factor for the pagerank algorithm, i.e., the probability of jumping to a random node
-        :param top_k: the number of documents to return
-        :return: the ranked document ids and their scores
+        @param query: the input phrase
+        @param top_k: the number of documents to return
+        @return: the ranked document ids and their scores
         """
 
+        assert isinstance(query, str), 'Query must be a string'
         if self.dpr_only:
             query_ner_list = []
         else:
