@@ -294,7 +294,7 @@ if __name__ == '__main__':
 
         print('Loading Vectors')
 
-        # Expanding OpenIE triples with cosine similiarity-based synonymy edges
+        # Expanding OpenIE triples with cosine similarity-based synonymy edges
         if cosine_sim_edges:
             if 'colbert' in model_name:
                 kb_similarity = pickle.load(open('data/lm_vectors/colbert/nearest_neighbor_kb_to_kb.p'.format(processed_model_name), 'rb'))

@@ -1,20 +1,28 @@
+import argparse
 import pickle
 from collections import defaultdict
 
 import igraph as ig
-import ipdb
+import numpy as np
+import pandas as pd
 from colbert import Searcher
 from colbert.data import Queries
 from colbert.infra import RunConfig, Run, ColBERTConfig
 from langchain_community.chat_models import ChatOllama
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from tqdm import tqdm
 
-from named_entity_extraction_parallel import *
-from processing import *
 import os
 from glob import glob
 from transformers import AutoModel, AutoTokenizer
 import json
 import torch
+
+from src.langchain_util import init_langchain_model
+from src.named_entity_extraction_parallel import query_prompt_one_shot_input, query_prompt_one_shot_output, query_prompt_template
+from src.processing import processing_phrases, mean_pooling, extract_json_dict
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
@@ -25,7 +33,7 @@ def min_max_normalize(x):
     return (x - np.min(x)) / (np.max(x) - np.min(x))
 
 
-class HippoRAG():
+class HippoRAG:
 
     def __init__(self, corpus_name='hotpotqa', extraction_model='openai', extraction_model_name='gpt-3.5-turbo-1106', retrieval_model_name='facebook/contriever',
                  extraction_type='ner', graph_type='facts_and_sim', sim_threshold=0.8, node_specificity=True, doc_ensemble=False,
@@ -50,6 +58,7 @@ class HippoRAG():
         self.extraction_model_name = extraction_model_name
         self.extraction_model_name_processed = extraction_model_name.replace('/', '_')
         self.client = init_langchain_model(extraction_model, extraction_model_name)
+        assert retrieval_model_name
         self.retrieval_model_name = retrieval_model_name  # 'colbertv2', 'facebook/contriever', or other HuggingFace models
         self.retrieval_model_name_processed = retrieval_model_name.replace('/', '_').replace('.', '')
 

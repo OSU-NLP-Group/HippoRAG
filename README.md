@@ -26,6 +26,7 @@ To use ColBERTv2, download the pre-trained [checkpoint](https://downloads.cs.sta
 cd exp
 wget https://downloads.cs.stanford.edu/nlp/data/colbert/colbertv2/colbertv2.0.tar.gz
 tar –xvzf colbertv2.0.tar.gz
+cd .. # get back to the root
 ```
 
 ## Using HippoRAG
@@ -93,6 +94,9 @@ See `src/langchain_util.py` to see how we set OpenAI and TogetherAI for our expe
 Once your corpus is created, add it under the `data` directory. We are now ready to start indexing using the commands below.
 
 We will use the best hyperparameters defined in our paper and assume your dataset name is `sample`.
+
+For the following commands,
+you don't have to index with both ColBERTv2 and Contriever. Choose one of them based on your preference.
 
 #### Indexing with ColBERTv2 for Synonymy Edges
 
@@ -266,6 +270,8 @@ After running these, you can explore the outputs inside the `output/ircot/` dire
 
 - [ ] Locally Deployed LLMs
 - [ ] Prompt Flexibility
+- [ ] Supporting Graph DB, e.g., Neo4j
+- [ ] Read/Write APIs for the graph
       
 ## Contact
 

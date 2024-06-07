@@ -1,9 +1,11 @@
 import sys
 
+sys.path.append('.')
+
+from src.processing import extract_json_dict
 from langchain_community.chat_models import ChatOllama
 
 sys.path.append('.')
-
 import argparse
 from multiprocessing import Pool
 
@@ -13,7 +15,6 @@ from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-from processing import *
 from tqdm import tqdm
 
 from src.langchain_util import init_langchain_model
