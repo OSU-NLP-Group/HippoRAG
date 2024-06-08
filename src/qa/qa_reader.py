@@ -38,10 +38,14 @@ cot_system_instruction_no_doc = ('As an advanced reading comprehension assistant
 
 def qa_read(query: str, passages: list, few_shot: list, client):
     """
-    :param query: query str
-    :param passages: list of passages
-    :return: answer from passages
+
+    @param query: query str
+    @param passages: list of passages
+    @param few_shot: few-shot in-context examples
+    @param client: Langchain client
+    @return: answer from passages
     """
+
     instruction = cot_system_instruction if len(passages) else cot_system_instruction_no_doc
     messages = [SystemMessage(instruction)]
     for sample in few_shot:

@@ -1,5 +1,6 @@
 import argparse
-from hipporag import HippoRAG
+
+from src.hipporag import HippoRAG
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
