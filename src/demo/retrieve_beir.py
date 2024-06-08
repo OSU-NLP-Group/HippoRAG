@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str)
+    parser.add_argument('--dataset', type=str, help='e.g., `sci_fact_test`, `fiqa_dev`.')
     parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo-1106')
     parser.add_argument('--retrieval_model', type=str, choices=['facebook/contriever', 'colbertv2'])
     parser.add_argument('--doc_ensemble', action='store_true')

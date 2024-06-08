@@ -150,14 +150,13 @@ python3 src/ircot_hipporag.py --dataset $DATA --retriever $RETRIEVER --llm $LLM_
 
 **Note:** In this setting, you can couple HippoRAG with IRCoT for complementary improvements. To run this, just change the `--max_steps` parameter above to the desired maximum number of LLM reasoning steps. Additionally, be sure to make a directory with your dataset's name under `data/ircot_prompt/` and add a file named `gold_with_3_distractors_context_cot_qa_codex.txt` with IRCoT prompts appropriate for your dataset. Check out the other datasets' IRCoT prompts for formatting and content inspiration.
 
-
-#### HippoRAG Integration 
+#### HippoRAG Integration
 
 We provide this example script to guide users who would like to integrate the HippoRAG API with their codebase directly.
 
 ```python
 import argparse
-from hipporag import HippoRAG
+from src.hipporag import HippoRAG
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -179,9 +178,13 @@ if __name__ == '__main__':
 
 To initiate an instance of the HippoRAG class, just choose an **LLM** and a **retrieval encoder model** which you have used to previously index your retrieval dataset.
 
+### Demo on Custom Datasets
+
+To run HippoRAG on a custom dataset, follow the indexing and retrieval steps as described above, and also add data processing and evaluation as follows. Here's an example for [BEIR](https://arxiv.org/abs/2104.08663) datasets, see `src/data_process` and `src/demo`.
+
 ## Paper Reproducibility
 
-In this section, you will find all the code necessary to reproduce the results shown in our paper.  
+In this section, you will find all the code necessary to reproduce the results shown in [our paper](https://arxiv.org/abs/2405.14831).  
 
 ### Data
 

@@ -25,7 +25,11 @@ def generate_dataset(split: str, qrels_path: str):
         score = item[2]
         if int(score) == 0:
             continue
-        corpus_item = corpus[corpus_id]
+        try:
+            corpus_item = corpus[corpus_id]
+        except KeyError:
+            print(f'corpus_id {corpus_id} not found')
+            continue
         query_item = queries[query_id]
 
         if corpus_item['_id'] not in split_corpus_ids:
@@ -66,7 +70,7 @@ def generate_dataset(split: str, qrels_path: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', type=str, help='directory to a BEIR subset')
+    parser.add_argument('--data', type=str, help='directory path to a BEIR subset')
     args = parser.parse_args()
 
     subset_name = args.data.split('/')[-1]
