@@ -173,7 +173,7 @@ class HippoRAG:
             if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
                 top_phrase_vectors, top_phrase_scores = self.get_top_phrase_vec_dpr(query_ner_list)
 
-        # Run Personalized PageRank (PPR) or other Graph Alg Doc Scores
+        # Run Personalized PageRank (PPR) or other Graph Algorithm Doc Scores
         if len(query_ner_list) > 0:
             combined_vector = np.max([top_phrase_vectors], axis=0)
 
@@ -335,6 +335,9 @@ class HippoRAG:
         elif 'case_study' in self.corpus_name:
             self.dataset_df = pd.DataFrame([p['passage'] for p in self.extracted_triples])
             self.dataset_df['paragraph'] = [s['passage'] for s in self.extracted_triples]
+        else:
+            self.dataset_df = pd.DataFrame([p['passage'] for p in self.extracted_triples])
+            self.dataset_df['paragraph'] = [s['passage'] for s in self.extracted_triples]
 
         self.kb_phrase_dict = pickle.load(open(
             'output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
@@ -425,8 +428,6 @@ class HippoRAG:
         print('Graph built: num vertices:', n_vertices, 'num edges:', len(edges))
 
     def load_node_vectors(self):
-        print('## Loading Node Vectors for DPR Only')
-
         if 'colbertv2' in self.retrieval_model_name:
             ranking_filename = 'output/{}_ranking_dict_{}_{}_{}.{}.p'.format(self.corpus_name, self.phrase_type,
                                                                              self.extraction_type, self.retrieval_model_name_processed,

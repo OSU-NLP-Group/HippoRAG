@@ -16,18 +16,26 @@ if __name__ == '__main__':
     parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo-1106')
     parser.add_argument('--retrieval_model', type=str, choices=['facebook/contriever', 'colbertv2'])
     parser.add_argument('--doc_ensemble', action='store_true')
+    parser.add_argument('--dpr_only', action='store_true')
     args = parser.parse_args()
 
+    # assert at most only one of them is True
+    assert not (args.doc_ensemble and args.dpr_only)
     corpus = json.load(open(f'data/{args.dataset}_corpus.json'))
     qrel = json.load(open(f'data/{args.dataset}_qrel.json'))  # note that this is json file processed from tsv file, used for pytrec_eval
-    hipporag = HippoRAG(args.dataset, 'openai', args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble)
+    hipporag = HippoRAG(args.dataset, 'openai', args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only)
 
     with open(f'data/{args.dataset}_queries.json') as f:
         queries = json.load(f)
 
-    run_output_path = f'output/{args.dataset}_run.json'
+    doc_ensemble_str = 'doc_ensemble' if args.doc_ensemble else 'no_ensemble'
+    extraction_str = args.extraction_model.replace('/', '_').replace('.', '_')
+    retrieval_str = args.retrieval_model.replace('/', '_').replace('.', '_')
+    run_output_path = f'exp/{args.dataset}_run_{doc_ensemble_str}_{extraction_str}_{retrieval_str}.json'
+
     if os.path.isfile(run_output_path):
         run_dict = json.load(open(run_output_path))
+        print(f'Log file found at {run_output_path}, len: {len(run_dict)}')
     else:
         run_dict = {}  # for pytrec_eval
 
