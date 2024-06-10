@@ -31,7 +31,8 @@ if __name__ == '__main__':
     doc_ensemble_str = 'doc_ensemble' if args.doc_ensemble else 'no_ensemble'
     extraction_str = args.extraction_model.replace('/', '_').replace('.', '_')
     retrieval_str = args.retrieval_model.replace('/', '_').replace('.', '_')
-    run_output_path = f'exp/{args.dataset}_run_{doc_ensemble_str}_{extraction_str}_{retrieval_str}.json'
+    dpr_only_str = '_dpr_only' if args.dpr_only else ''
+    run_output_path = f'exp/{args.dataset}_run_{doc_ensemble_str}_{extraction_str}_{retrieval_str}{dpr_only_str}.json'
 
     if os.path.isfile(run_output_path):
         run_dict = json.load(open(run_output_path))
