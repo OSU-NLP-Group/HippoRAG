@@ -25,7 +25,7 @@ To use ColBERTv2, download the pre-trained [checkpoint](https://downloads.cs.sta
 ```shell
 cd exp
 wget https://downloads.cs.stanford.edu/nlp/data/colbert/colbertv2/colbertv2.0.tar.gz
-tar –xvzf colbertv2.0.tar.gz
+tar -xvzf colbertv2.0.tar.gz
 cd .. # get back to the root
 ```
 
