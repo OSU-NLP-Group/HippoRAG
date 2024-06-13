@@ -31,6 +31,8 @@ cd .. # get back to the root
 
 ## Using HippoRAG
 
+**Note that the working directory is HippoRAG root for the following commands.**
+
 ### Setting up your data
 
 To setup your own retrieval corpus, follow the format and naming convention shown in `data/sample_corpus.json` (your dataset's name should be followed by `_corpus.json`). If running an experiment with pre-defined questions, organize your query corpus according to the query file `data/sample.json`, be sure to also follow our naming convention.
