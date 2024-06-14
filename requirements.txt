@@ -29,6 +29,7 @@ entrypoints==0.4
 eval_type_backport==0.2.0
 exceptiongroup==1.2.0
 executing==2.0.1
+faiss-gpu==1.7.2
 filelock==3.13.1
 Flask==3.0.2
 fonttools==4.49.0
