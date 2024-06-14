@@ -24,7 +24,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str)
     parser.add_argument('--extraction_model', type=str)
     parser.add_argument('--threshold', type=float)
-    parser.add_argument('--create_graph_flag', action='store_true')
+    parser.add_argument('--create_graph', action='store_true')
     parser.add_argument('--extraction_type', type=str)
     parser.add_argument('--cosine_sim_edges', action='store_true')
 
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     processed_model_name = model_name.replace('/', '_').replace('.', '')
     extraction_model = args.extraction_model.replace('/', '_')
     threshold = args.threshold
-    create_graph_flag = args.create_graph_flag
+    create_graph_flag = args.create_graph
     extraction_type = args.extraction_type
     cosine_sim_edges = args.cosine_sim_edges
 
