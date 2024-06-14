@@ -122,6 +122,33 @@ class HippoRAG:
         self.statistics = {}
         self.ensembling_debug = []
 
+    def get_extraction_by_passage_idx(self, passage_idx):
+        """
+        Get the extraction results for a specific passage.
+        @param passage_idx: the passage idx, i.e., 'idx' within each passage dict, not the array index for the corpus
+        @return: the extraction results for the passage
+        """
+        # find item with idx == passage_idx in self.extracted_triples
+        for item in self.extracted_triples:
+            if item['idx'] == passage_idx:
+                return item
+        return None
+
+    def get_shortest_distance_between_nodes(self, node1: str, node2: str):
+        """
+        Get the shortest distance between two nodes in the graph
+        @param node1: node1 phrase
+        @param node2: node2 phrase
+        @return: the shortest distance between the two nodes
+        """
+        try:
+            node1_id = np.where(self.phrases == node1)[0][0]
+            node2_id = np.where(self.phrases == node2)[0][0]
+
+            return self.g.shortest_paths(node1_id, node2_id)[0][0]
+        except Exception as e:
+            return -1
+
     def rank_docs(self, query: str, top_k=10):
         """
         Rank documents based on the query

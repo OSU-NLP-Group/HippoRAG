@@ -1,3 +1,6 @@
+import sys
+
+sys.path.append('.')
 import argparse
 
 from src.hipporag import HippoRAG

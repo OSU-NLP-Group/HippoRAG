@@ -12,18 +12,50 @@ from tqdm import tqdm
 
 
 def error_analysis(queries, run_dict, eval_res):
-    retrieval_logs = []
-    for idx, query_id in enumerate(run_dict):
+    errors = []
+    for idx, query_id in enumerate(run_dict['retrieved']):
+        query_item = queries[idx]
         if eval_res[query_id]['ndcg'] > 0.5:
             continue
         gold_passages = queries[idx]['paragraphs']
+        gold_passage_ids = [p['idx'] for p in query_item['paragraphs']]
+        gold_passage_extractions = [hipporag.get_extraction_by_passage_idx(p_idx) for p_idx in gold_passage_ids]
+        gold_passage_extracted_entities = [e for extr in gold_passage_extractions for e in extr['extracted_entities']]
+        gold_passage_extracted_triples = [t for extr in gold_passage_extractions for t in extr['extracted_triples']]
+
+        distances = []
+        num_dis = 0
+        if 'linked_node_scores' in run_dict['log'][query_id]:
+            for node_linking in run_dict['log'][query_id]['linked_node_scores']:
+                linked_node_phrase = node_linking[1]
+                distance = []
+                for e in gold_passage_extracted_entities:
+                    if e == linked_node_phrase:
+                        distance.append(0)
+                        num_dis += 1
+                    d = hipporag.get_shortest_distance_between_nodes(linked_node_phrase, e)
+                    if d > 0:
+                        distance.append(d)
+                        num_dis += 1
+                distances.append(distance)
+
         pred_passages = []
-        for pred_corpus_id in run_dict[query_id]:
+        for pred_corpus_id in run_dict['retrieved'][query_id]:
             for corpus_item in corpus:
                 if corpus_item['idx'] == pred_corpus_id:
                     pred_passages.append(corpus_item)
 
-        retrieval_logs.append({'query': queries[idx]['text'], 'gold_passages': gold_passages, 'pred_passages': pred_passages})
+        errors.append({
+            'query': queries[idx]['text'],
+            'gold_passages': gold_passages,
+            'pred_passages': pred_passages,
+            'log': run_dict['log'][query_id],
+            'distances': distances,
+            'avg_distance': sum([sum(d) for d in distances]) / num_dis if num_dis > 0 else None,
+            'entities_in_supporting_passage': gold_passage_extracted_entities,
+            'triples_in_supporting_passage': gold_passage_extracted_triples,
+        })
+    return errors
 
 
 if __name__ == '__main__':
@@ -55,32 +87,38 @@ if __name__ == '__main__':
 
     if os.path.isfile(run_output_path):
         run_dict = json.load(open(run_output_path))
-        print(f'Log file found at {run_output_path}, len: {len(run_dict)}')
+        print(f'Log file found at {run_output_path}, len: {len(run_dict["retrieved"])}')
     else:
-        run_dict = {}  # for pytrec_eval
+        run_dict = {'retrieved': {}, 'log': {}}  # for pytrec_eval
 
     to_update_run = False
     for query in tqdm(queries):
         query_text = query['text']
         query_id = query['id']
-        if query_id in run_dict:
+        if query_id in run_dict['retrieved']:
             continue
-        ranks, scores, logs = hipporag.rank_docs(query_text, top_k=10)
+        ranks, scores, log = hipporag.rank_docs(query_text, top_k=10)
 
         retrieved_docs = [corpus[r] for r in ranks]
-        run_dict[query_id] = {doc['idx']: score for doc, score in zip(retrieved_docs, scores)}
+        run_dict['retrieved'][query_id] = {doc['idx']: score for doc, score in zip(retrieved_docs, scores)}
+        run_dict['log'][query_id] = log
         to_update_run = True
 
     if to_update_run:
         with open(run_output_path, 'w') as f:
             json.dump(run_dict, f)
-            print(f'Run saved to {run_output_path}, len: {len(run_dict)}')
+            print(f'Run saved to {run_output_path}, len: {len(run_dict["retrieved"])}')
 
-    eval_res = evaluator.evaluate(run_dict)
+    eval_res = evaluator.evaluate(run_dict['retrieved'])
 
     # get average scores
     avg_scores = {}
     for metric in metrics:
         avg_scores[metric] = round(sum([v[metric] for v in eval_res.values()]) / len(eval_res), 3)
     print(f'Evaluation results: {avg_scores}')
-    # error_analysis(queries, run_dict, eval_res)
+
+    errors = error_analysis(queries, run_dict, eval_res)
+    error_sample_output_path = f'exp/{args.dataset}_error_{doc_ensemble_str}_{extraction_str}_{retrieval_str}{dpr_only_str}.json'
+    with open(error_sample_output_path, 'w') as f:
+        json.dump(errors, f)
+    print(f'Error samples saved to {error_sample_output_path}')
