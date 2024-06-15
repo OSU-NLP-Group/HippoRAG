@@ -335,6 +335,9 @@ class HippoRAG:
     def load_important_files(self):
         possible_files = glob(
             'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed))
+        if len(possible_files) == 0:
+            print('No extraction files found, please check if working directory is correct or if the extraction has been done.')
+            return
         max_samples = np.max(
             [int(file.split('{}_'.format(self.extraction_model_name_processed))[1].split('.json')[0]) for file in possible_files])
         extracted_file = json.load(open(
