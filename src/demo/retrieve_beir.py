@@ -1,6 +1,8 @@
 # Note that BEIR uses https://github.com/cvangysel/pytrec_eval to evaluate the retrieval results.
 import sys
 
+from src.data_process.util import merge_chunk_scores
+
 sys.path.append('.')
 from src.hipporag import HippoRAG
 import os
@@ -11,7 +13,7 @@ import json
 from tqdm import tqdm
 
 
-def error_analysis(queries, run_dict, eval_res):
+def error_analysis(queries, run_dict, eval_res, chunk=False):
     errors = []
     for idx, query_id in enumerate(run_dict['retrieved']):
         query_item = queries[idx]
@@ -19,7 +21,7 @@ def error_analysis(queries, run_dict, eval_res):
             continue
         gold_passages = queries[idx]['paragraphs']
         gold_passage_ids = [p['idx'] for p in query_item['paragraphs']]
-        gold_passage_extractions = [hipporag.get_extraction_by_passage_idx(p_idx) for p_idx in gold_passage_ids]
+        gold_passage_extractions = [hipporag.get_extraction_by_passage_idx(p_idx, chunk) for p_idx in gold_passage_ids]
         gold_passage_extracted_entities = [e for extr in gold_passage_extractions for e in extr['extracted_entities']]
         gold_passage_extracted_triples = [t for extr in gold_passage_extractions for t in extr['extracted_triples']]
 
@@ -61,12 +63,15 @@ def error_analysis(queries, run_dict, eval_res):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, help='e.g., `sci_fact_test`, `fiqa_dev`.')
+    parser.add_argument('--chunk', action='store_true')
     parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo-1106')
     parser.add_argument('--retrieval_model', type=str, choices=['facebook/contriever', 'colbertv2'])
     parser.add_argument('--doc_ensemble', action='store_true')
     parser.add_argument('--dpr_only', action='store_true')
     args = parser.parse_args()
 
+    if args.chunk is False and 'chunk' in args.dataset:
+        args.chunk = True
     # assert at most only one of them is True
     assert not (args.doc_ensemble and args.dpr_only)
     corpus = json.load(open(f'data/{args.dataset}_corpus.json'))
@@ -109,6 +114,11 @@ if __name__ == '__main__':
             json.dump(run_dict, f)
             print(f'Run saved to {run_output_path}, len: {len(run_dict["retrieved"])}')
 
+    # postprocess run_dict['retrieved'] if the corpus is chunked
+    if args.chunk:
+        for idx in run_dict['retrieved']:
+            run_dict['retrieved'][idx] = merge_chunk_scores(run_dict['retrieved'][idx])
+
     eval_res = evaluator.evaluate(run_dict['retrieved'])
 
     # get average scores
@@ -117,7 +127,7 @@ if __name__ == '__main__':
         avg_scores[metric] = round(sum([v[metric] for v in eval_res.values()]) / len(eval_res), 3)
     print(f'Evaluation results: {avg_scores}')
 
-    errors = error_analysis(queries, run_dict, eval_res)
+    errors = error_analysis(queries, run_dict, eval_res, args.chunk)
     error_sample_output_path = f'exp/{args.dataset}_error_{doc_ensemble_str}_{extraction_str}_{retrieval_str}{dpr_only_str}.json'
     with open(error_sample_output_path, 'w') as f:
         json.dump(errors, f)
