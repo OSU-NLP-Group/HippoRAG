@@ -158,8 +158,11 @@ if __name__ == '__main__':
     corpus = [json.loads(c) for c in corpus]
     corpus = {c['_id']: c for c in corpus}
 
-    if os.path.isfile(os.path.join(args.data, 'qrels/test.tsv')):  # test set
-        if args.corpus == 'relevant':
-            generate_dataset_with_relevant_corpus('test', os.path.join(args.data, 'qrels/test.tsv'), args.chunk)
-        elif args.corpus == 'full':
-            generate_dataest_with_full_corpus('test', os.path.join(args.data, 'qrels/test.tsv'), args.chunk)
+    for split in ['train', 'dev', 'test']:
+        if os.path.isfile(os.path.join(args.data, f'qrels/{split}.tsv')):
+            if args.corpus == 'relevant':
+                generate_dataset_with_relevant_corpus(split, os.path.join(args.data, f'qrels/{split}.tsv'), args.chunk)
+            elif args.corpus == 'full':
+                generate_dataest_with_full_corpus(split, os.path.join(args.data, f'qrels/{split}.tsv'), args.chunk)
+        else:
+            print(f'{split} not found, skipped')
