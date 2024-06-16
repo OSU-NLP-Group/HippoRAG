@@ -1,4 +1,5 @@
 import argparse
+import logging
 import pickle
 from collections import defaultdict
 
@@ -78,6 +79,8 @@ class HippoRAG:
         self.recognition_threshold = recognition_threshold
 
         self.version = 'v3'
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        self.logger = logging.getLogger(__name__)
 
         try:
             self.named_entity_cache = pd.read_csv('output/{}_queries.named_entity_output.tsv'.format(self.corpus_name), sep='\t')
@@ -122,15 +125,18 @@ class HippoRAG:
         self.statistics = {}
         self.ensembling_debug = []
 
-    def get_extraction_by_passage_idx(self, passage_idx):
+    def get_extraction_by_passage_idx(self, passage_idx, chunk=False):
         """
         Get the extraction results for a specific passage.
         @param passage_idx: the passage idx, i.e., 'idx' within each passage dict, not the array index for the corpus
+        @param chunk: whether the corpus is chunked
         @return: the extraction results for the passage
         """
         # find item with idx == passage_idx in self.extracted_triples
         for item in self.extracted_triples:
-            if item['idx'] == passage_idx:
+            if not chunk and item['idx'] == passage_idx:
+                return item
+            elif chunk and (item['idx'] == passage_idx or item['idx'].startswith(passage_idx + '_')):
                 return item
         return None
 
@@ -171,7 +177,7 @@ class HippoRAG:
 
                 query_ner_list = [processing_phrases(p) for p in query_ner_list]
             except:
-                print('Error in Query NER')
+                self.logger.error('Error in Query NER')
                 query_ner_list = []
 
         if 'colbertv2' in self.retrieval_model_name:
@@ -335,6 +341,9 @@ class HippoRAG:
     def load_important_files(self):
         possible_files = glob(
             'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed))
+        if len(possible_files) == 0:
+            self.logger.critical('No extraction files found, please check if working directory is correct or if the extraction has been done.')
+            return
         max_samples = np.max(
             [int(file.split('{}_'.format(self.extraction_model_name_processed))[1].split('.json')[0]) for file in possible_files])
         extracted_file = json.load(open(
@@ -452,7 +461,7 @@ class HippoRAG:
         self.g = ig.Graph(n_vertices, edges)
 
         self.g.es['weight'] = [self.graph_plus[(v1, v3)] for v1, v3 in edges]
-        print('Graph built: num vertices:', n_vertices, 'num edges:', len(edges))
+        self.logger.info(f'Graph built: num vertices: {n_vertices}, num_edges: {len(edges)}')
 
     def load_node_vectors(self):
         if 'colbertv2' in self.retrieval_model_name:
@@ -497,14 +506,14 @@ class HippoRAG:
 
             self.kb_only_mat = kb_mat[kb_only_indices]  # a matrix of phrase vectors
 
-            print('{} phrases did not have vectors.'.format(num_non_vector_phrases))
+            self.logger.info('{} phrases did not have vectors.'.format(num_non_vector_phrases))
 
     def get_dpr_doc_embedding(self):
         cache_filename = 'data/lm_vectors/{}_mean/{}_doc_embeddings.p'.format(self.retrieval_model_name_processed,
                                                                               self.corpus_name)
         if os.path.exists(cache_filename):
             self.doc_embedding_mat = pickle.load(open(cache_filename, 'rb'))
-            print(f'Loaded doc embeddings from {cache_filename}, shape: {self.doc_embedding_mat.shape}')
+            self.logger.info(f'Loaded doc embeddings from {cache_filename}, shape: {self.doc_embedding_mat.shape}')
         else:
             self.doc_embeddings = []
 
@@ -515,7 +524,7 @@ class HippoRAG:
 
             self.doc_embedding_mat = np.concatenate(self.doc_embeddings, axis=0)  # (num docs, embedding dim)
             pickle.dump(self.doc_embedding_mat, open(cache_filename, 'wb'))
-            print(f'Saved doc embeddings to {cache_filename}, shape: {self.doc_embedding_mat.shape}')
+            self.logger.info(f'Saved doc embeddings to {cache_filename}, shape: {self.doc_embedding_mat.shape}')
 
     def get_embedding_with_mean_pooling(self, input_str):
         with torch.no_grad():
@@ -663,7 +672,7 @@ class HippoRAG:
                 assert 'named_entities' in response_content
                 response_content = str(response_content)
             except Exception as e:
-                print('Query NER exception', e)
+                self.logger.error(f'Query NER exception {e}')
                 response_content = {'named_entities': []}
 
         return response_content, total_tokens

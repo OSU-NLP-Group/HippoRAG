@@ -86,6 +86,10 @@ The corpus and optional query JSON files should have the following format:
 ]
 ```
 
+#### (Optional) Chunking Corpus
+
+When preparing your corpus data, you may need to chunk each passage, as longer passage maybe too complex for the OpenIE process. Check `src/data_process/util.py` to chunk your whole corpus if you need.
+
 ### Integration with LangChain
 
 This codebase calls LLM through [LangChain](https://www.langchain.com/), which makes it easier for HippoRAG to call different online LLM APIs or offline LLM deployments.
