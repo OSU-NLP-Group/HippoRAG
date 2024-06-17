@@ -60,3 +60,29 @@ def merge_chunk_scores(id_score: dict):
             merged_scores[passage_id] = 0
         merged_scores[passage_id] = max(merged_scores[passage_id], score)
     return merged_scores
+
+
+def merge_chunks(corpus: list):
+    """
+    Merge the chunks of a corpus into the original passage
+    @param corpus: a passage list
+    @return: a merged corpus, dict
+    """
+
+    new_corpus = {}
+    for p in corpus:
+        idx = p['idx']
+        if '_' not in idx:
+            new_corpus[idx] = p
+        else:
+            original_idx = idx.split('_')[0]
+            if original_idx not in new_corpus:
+                new_corpus[original_idx] = {
+                    **p,
+                    'text': p['text'],
+                    'idx': original_idx,
+                }
+            else:
+                new_corpus[original_idx]['text'] += ' ' + p['text']
+
+    return list(new_corpus.values())

@@ -1,7 +1,7 @@
 # Note that BEIR uses https://github.com/cvangysel/pytrec_eval to evaluate the retrieval results.
 import sys
 
-from src.data_process.util import merge_chunk_scores
+from src.data_process.util import merge_chunk_scores, merge_chunks
 
 sys.path.append('.')
 from src.hipporag import HippoRAG
@@ -13,11 +13,11 @@ import json
 from tqdm import tqdm
 
 
-def error_analysis(queries, run_dict, eval_res, chunk=False):
-    errors = []
-    for idx, query_id in enumerate(run_dict['retrieved']):
+def detailed_log(queries, run_dict, eval_res, chunk=False, threshold=None):
+    logs = []
+    for idx, query_id in tqdm(enumerate(run_dict['retrieved']), desc='Error analysis', total=len(run_dict['retrieved'])):
         query_item = queries[idx]
-        if eval_res[query_id]['ndcg'] > 0.5:
+        if threshold is not None and eval_res[query_id]['ndcg'] >= threshold:
             continue
         gold_passages = queries[idx]['paragraphs']
         gold_passage_ids = [p['idx'] for p in query_item['paragraphs']]
@@ -43,12 +43,20 @@ def error_analysis(queries, run_dict, eval_res, chunk=False):
 
         pred_passages = []
         for pred_corpus_id in run_dict['retrieved'][query_id]:
-            for corpus_item in corpus:
-                if corpus_item['idx'] == pred_corpus_id:
-                    pred_passages.append(corpus_item)
+            if not chunk:
+                for corpus_item in corpus:
+                    if corpus_item['idx'] == pred_corpus_id:
+                        pred_passages.append(corpus_item)
+            else:
+                for corpus_item in corpus:
+                    if corpus_item['idx'] == pred_corpus_id or corpus_item['idx'].startswith(f'{pred_corpus_id}_'):
+                        pred_passages.append(corpus_item)
+        if chunk:
+            pred_passages = merge_chunks(pred_passages)
 
-        errors.append({
+        logs.append({
             'query': queries[idx]['text'],
+            'ndcg': eval_res[query_id]['ndcg'],
             'gold_passages': gold_passages,
             'pred_passages': pred_passages,
             'log': run_dict['log'][query_id],
@@ -57,7 +65,7 @@ def error_analysis(queries, run_dict, eval_res, chunk=False):
             'entities_in_supporting_passage': gold_passage_extracted_entities,
             'triples_in_supporting_passage': gold_passage_extracted_triples,
         })
-    return errors
+    return logs
 
 
 if __name__ == '__main__':
@@ -127,8 +135,8 @@ if __name__ == '__main__':
         avg_scores[metric] = round(sum([v[metric] for v in eval_res.values()]) / len(eval_res), 3)
     print(f'Evaluation results: {avg_scores}')
 
-    errors = error_analysis(queries, run_dict, eval_res, args.chunk)
-    error_sample_output_path = f'exp/{args.dataset}_error_{doc_ensemble_str}_{extraction_str}_{retrieval_str}{dpr_only_str}.json'
-    with open(error_sample_output_path, 'w') as f:
-        json.dump(errors, f)
-    print(f'Error samples saved to {error_sample_output_path}')
+    logs = detailed_log(queries, run_dict, eval_res, args.chunk)
+    detailed_log_output_path = f'exp/{args.dataset}_log_{doc_ensemble_str}_{extraction_str}_{retrieval_str}{dpr_only_str}.json'
+    with open(detailed_log_output_path, 'w') as f:
+        json.dump(logs, f)
+    print(f'Detailed log saved to {detailed_log_output_path}')
