@@ -36,7 +36,7 @@ class HippoRAG:
 
     def __init__(self, corpus_name='hotpotqa', extraction_model='openai', extraction_model_name='gpt-3.5-turbo-1106',
                  retrieval_model_name='facebook/contriever', extraction_type='ner', graph_type='facts_and_sim', sim_threshold=0.8, node_specificity=True, doc_ensemble=False,
-                 colbert_config=None, dpr_only=False, graph_alg='ppr', damping=0.1, recognition_threshold=0.9,
+                 colbert_config=None, dpr_only=False, graph_alg='ppr', damping=0.1, recognition_threshold=0.9, corpus_path=None,
                  qa_model: LangChainModel = None):
         """
         @param corpus_name: Name of the dataset to use for retrieval
@@ -53,6 +53,7 @@ class HippoRAG:
         @param graph_alg: Type of graph algorithm to be used for retrieval, defaults ot PPR
         @param damping: Damping factor for PPR
         @param recognition_threshold: Threshold used for uncertainty-based ensembling.
+        @param corpus_path: path to the corpus file (see the format in README.md), not needed for now if extraction files are already present
         @param qa_model: QA model
         """
 
@@ -95,18 +96,21 @@ class HippoRAG:
             self.named_entity_cache = {row['question']: eval(row['triples']) for i, row in self.named_entity_cache.iterrows()}
 
         self.embed_model = init_embedding_model(self.retrieval_model_name)
+        self.dpr_only = dpr_only
+        self.doc_ensemble = doc_ensemble
+        self.corpus_path = corpus_path
 
         # Loading Important Corpus Files
-        self.load_important_files()
+        if not self.dpr_only:
+            self.load_index_files()
 
-        # Construct Graph
-        self.build_graph()
+            # Construct Graph
+            self.build_graph()
 
-        # Loading Node Embeddings
-        self.load_node_vectors()
-
-        self.doc_ensemble = doc_ensemble
-        self.dpr_only = dpr_only
+            # Loading Node Embeddings
+            self.load_node_vectors()
+        else:
+            self.load_corpus()
 
         if (doc_ensemble or dpr_only) and self.retrieval_model_name not in ['colbertv2', 'bm25']:
             # Loading Doc Embeddings
@@ -215,27 +219,28 @@ class HippoRAG:
                 top_phrase_vectors, top_phrase_scores = self.get_top_phrase_vec_dpr(query_ner_list)
 
         # Run Personalized PageRank (PPR) or other Graph Algorithm Doc Scores
-        if not self.dpr_only and len(query_ner_list) > 0:
-            combined_vector = np.max([top_phrase_vectors], axis=0)
+        if not self.dpr_only:
+            if len(query_ner_list) > 0:
+                combined_vector = np.max([top_phrase_vectors], axis=0)
 
-            if self.graph_alg == 'ppr':
-                ppr_phrase_probs = self.run_pagerank_igraph_chunk([top_phrase_vectors])[0]
-            elif self.graph_alg == 'none':
-                ppr_phrase_probs = combined_vector
-            elif self.graph_alg == 'neighbor_2':
-                ppr_phrase_probs = self.get_neighbors(combined_vector, 2)
-            elif self.graph_alg == 'neighbor_3':
-                ppr_phrase_probs = self.get_neighbors(combined_vector, 3)
-            elif self.graph_alg == 'paths':
-                ppr_phrase_probs = self.get_neighbors(combined_vector, 3)
-            else:
-                assert False, f'Graph Algorithm {self.graph_alg} Not Implemented'
+                if self.graph_alg == 'ppr':
+                    ppr_phrase_probs = self.run_pagerank_igraph_chunk([top_phrase_vectors])[0]
+                elif self.graph_alg == 'none':
+                    ppr_phrase_probs = combined_vector
+                elif self.graph_alg == 'neighbor_2':
+                    ppr_phrase_probs = self.get_neighbors(combined_vector, 2)
+                elif self.graph_alg == 'neighbor_3':
+                    ppr_phrase_probs = self.get_neighbors(combined_vector, 3)
+                elif self.graph_alg == 'paths':
+                    ppr_phrase_probs = self.get_neighbors(combined_vector, 3)
+                else:
+                    assert False, f'Graph Algorithm {self.graph_alg} Not Implemented'
 
-            fact_prob = self.facts_to_phrases_mat.dot(ppr_phrase_probs)
-            ppr_doc_prob = self.docs_to_facts_mat.dot(fact_prob)
-            ppr_doc_prob = min_max_normalize(ppr_doc_prob)
-        else:
-            ppr_doc_prob = np.ones(len(self.extracted_triples)) / len(self.extracted_triples)
+                fact_prob = self.facts_to_phrases_mat.dot(ppr_phrase_probs)
+                ppr_doc_prob = self.docs_to_facts_mat.dot(fact_prob)
+                ppr_doc_prob = min_max_normalize(ppr_doc_prob)
+            else:  # dpr_only or no entities found
+                ppr_doc_prob = np.ones(len(self.extracted_triples)) / len(self.extracted_triples)
 
         # Combine Query-Doc and PPR Scores
         if self.doc_ensemble or self.dpr_only:
@@ -322,7 +327,15 @@ class HippoRAG:
 
         return prob_vector
 
-    def load_important_files(self):
+    def load_corpus(self):
+        if self.corpus_path is None:
+            self.corpus_path = 'data/{}_corpus.json'.format(self.corpus_name)
+        assert os.path.isfile(self.corpus_path), 'Corpus file not found'
+        self.corpus = json.load(open(self.corpus_path, 'r'))
+        self.dataset_df = pd.DataFrame()
+        self.dataset_df['paragraph'] = [p['title'] + '\n' + p['text'] for p in self.corpus]
+
+    def load_index_files(self):
         possible_files = glob(
             'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed))
         if len(possible_files) == 0:
@@ -335,9 +348,6 @@ class HippoRAG:
             'r'))
 
         self.extracted_triples = extracted_file['docs']
-
-        if self.extraction_model_name != 'gpt-3.5-turbo-1106':
-            self.extraction_type = self.extraction_type + '_' + self.extraction_model_name_processed
 
         if self.corpus_name == 'hotpotqa':
             self.dataset_df = pd.DataFrame([p['passage'].split('\n')[0] for p in self.extracted_triples])
@@ -359,6 +369,8 @@ class HippoRAG:
             self.dataset_df = pd.DataFrame([p['passage'] for p in self.extracted_triples])
             self.dataset_df['paragraph'] = [s['passage'] for s in self.extracted_triples]
 
+        if self.extraction_model_name != 'gpt-3.5-turbo-1106':
+            self.extraction_type = self.extraction_type + '_' + self.extraction_model_name_processed
         self.kb_phrase_dict = pickle.load(open(
             'output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
                                                                       self.extraction_type, self.version), 'rb'))
