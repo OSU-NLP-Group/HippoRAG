@@ -19,7 +19,7 @@ from langchain_openai import ChatOpenAI
 from tqdm import tqdm
 
 from src.langchain_util import init_langchain_model, LangChainModel
-from src.llm import init_embedding_model
+from src.llm.util import init_embedding_model
 from src.named_entity_extraction_parallel import query_prompt_one_shot_input, query_prompt_one_shot_output, query_prompt_template
 from src.processing import processing_phrases, extract_json_dict
 
