@@ -3,6 +3,7 @@ import argparse
 from glob import glob
 import os.path
 
+import ipdb
 import pandas as pd
 
 import pickle
@@ -19,12 +20,6 @@ from processing import *
 
 # TODO: Change hard-coded vector output directory
 VECTOR_DIR = 'data/lm_vectors'
-
-
-def mean_pooling(token_embeddings, mask):
-    token_embeddings = token_embeddings.masked_fill(~mask[..., None].bool(), 0.)
-    sentence_embeddings = token_embeddings.sum(dim=1) / mask.sum(dim=1)[..., None]
-    return sentence_embeddings
 
 
 class RetrievalModule:

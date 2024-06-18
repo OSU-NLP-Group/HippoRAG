@@ -223,9 +223,9 @@ if __name__ == '__main__':
 
         graph_json = {}
 
-        docs_to_facts = {}  # Num Docs x Num Facts (66k x 695k)
-        facts_to_phrases = {}  # Num Facts x Num Phrases (695k x 786k)
-        graph = {}  # Num Phrases x Num Phrases (786k x 786k)
+        docs_to_facts = {}  # (Num Docs, Num Facts)
+        facts_to_phrases = {}  # (Num Facts, Num Phrases)
+        graph = {}  # (Num Phrases, Num Phrases)
 
         num_triple_edges = 0
         num_doc_edges = 0

@@ -1,11 +1,14 @@
-import argparse
+import json
 import logging
+import os
 import pickle
 from collections import defaultdict
+from glob import glob
 
 import igraph as ig
 import numpy as np
 import pandas as pd
+import torch
 from colbert import Searcher
 from colbert.data import Queries
 from colbert.infra import RunConfig, Run, ColBERTConfig
@@ -15,15 +18,10 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from tqdm import tqdm
 
-import os
-from glob import glob
-from transformers import AutoModel, AutoTokenizer
-import json
-import torch
-
 from src.langchain_util import init_langchain_model, LangChainModel
+from src.llm import init_embedding_model
 from src.named_entity_extraction_parallel import query_prompt_one_shot_input, query_prompt_one_shot_output, query_prompt_template
-from src.processing import processing_phrases, mean_pooling, extract_json_dict
+from src.processing import processing_phrases, extract_json_dict
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
@@ -96,9 +94,7 @@ class HippoRAG:
         elif 'question' in self.named_entity_cache:
             self.named_entity_cache = {row['question']: eval(row['triples']) for i, row in self.named_entity_cache.iterrows()}
 
-        if self.retrieval_model_name not in ['colbertv2', 'bm25']:
-            self.retrieval_model = AutoModel.from_pretrained(self.retrieval_model_name).to('cuda')
-            self.tokenizer = AutoTokenizer.from_pretrained(self.retrieval_model_name)
+        self.embed_model = init_embedding_model(self.retrieval_model_name)
 
         # Loading Important Corpus Files
         self.load_important_files()
@@ -208,10 +204,10 @@ class HippoRAG:
 
             if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
                 top_phrase_vectors, top_phrase_scores = self.get_top_phrase_vec_colbertv2(query_ner_list)
-        else:  # DPR model
+        else:  # dense retrieval model
             # Get Query Doc Scores
             if self.doc_ensemble or self.dpr_only:
-                query_embedding = self.get_embedding_with_mean_pooling(query).cpu().numpy()
+                query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True)
                 query_doc_scores = np.dot(self.doc_embedding_mat, query_embedding.T)
                 query_doc_scores = query_doc_scores.T[0]
 
@@ -219,7 +215,7 @@ class HippoRAG:
                 top_phrase_vectors, top_phrase_scores = self.get_top_phrase_vec_dpr(query_ner_list)
 
         # Run Personalized PageRank (PPR) or other Graph Algorithm Doc Scores
-        if len(query_ner_list) > 0:
+        if not self.dpr_only and len(query_ner_list) > 0:
             combined_vector = np.max([top_phrase_vectors], axis=0)
 
             if self.graph_alg == 'ppr':
@@ -326,30 +322,6 @@ class HippoRAG:
 
         return prob_vector
 
-    def get_neighbors(self, prob_vector, max_depth=4):
-
-        initial_nodes = prob_vector.nonzero()[0]
-        min_prob = np.min(prob_vector[initial_nodes])
-
-        for initial_node in initial_nodes:
-            all_neighborhood = []
-
-            current_nodes = [initial_node]
-
-            for depth in range(max_depth):
-                next_nodes = []
-
-                for node in current_nodes:
-                    next_nodes.extend(self.g.neighbors(node))
-                    all_neighborhood.extend(self.g.neighbors(node))
-
-                current_nodes = list(set(next_nodes))
-
-            for i in set(all_neighborhood):
-                prob_vector[i] += 0.5 * min_prob
-
-        return prob_vector
-
     def load_important_files(self):
         possible_files = glob(
             'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed))
@@ -400,10 +372,7 @@ class HippoRAG:
                     self.corpus_name, self.graph_type, self.phrase_type,
                     self.extraction_type, self.retrieval_model_name_processed, self.version), 'rb'))
         except:
-            self.relations_dict = pickle.load(open('output/{}_{}_graph_relation_dict_{}_{}.{}.subset.p'.format(
-                self.corpus_name, self.graph_type, self.phrase_type,
-                self.extraction_type, self.retrieval_model_name_processed,
-                self.version), 'rb'))
+            pass
 
         self.lose_facts = list(self.lose_fact_dict.keys())
         self.lose_facts = [self.lose_facts[i] for i in np.argsort(list(self.lose_fact_dict.values()))]
@@ -531,25 +500,12 @@ class HippoRAG:
 
             for doc in tqdm(self.dataset_df.itertuples(index=False), total=len(self.dataset_df),
                             desc='Embedding Documents'):
-                embeddings = self.get_embedding_with_mean_pooling(doc.paragraph)
+                embeddings = self.embed_model.encode_text(doc.paragraph)
                 self.doc_embeddings.append(embeddings.cpu().numpy())
 
             self.doc_embedding_mat = np.concatenate(self.doc_embeddings, axis=0)  # (num docs, embedding dim)
             pickle.dump(self.doc_embedding_mat, open(cache_filename, 'wb'))
             self.logger.info(f'Saved doc embeddings to {cache_filename}, shape: {self.doc_embedding_mat.shape}')
-
-    def get_embedding_with_mean_pooling(self, input_str):
-        with torch.no_grad():
-            encoding = self.tokenizer(input_str, return_tensors='pt', padding=True, truncation=True)
-            input_ids = encoding['input_ids']
-            attention_mask = encoding['attention_mask']
-            input_ids = input_ids.to('cuda')
-            attention_mask = attention_mask.to('cuda')
-            outputs = self.retrieval_model(input_ids, attention_mask=attention_mask)
-            embeddings = mean_pooling(outputs[0], attention_mask)
-            embeddings = embeddings.T.divide(torch.linalg.norm(embeddings, dim=1)).T
-
-            return embeddings
 
     def run_pagerank_igraph_chunk(self, reset_prob_chunk):
         """
@@ -573,7 +529,7 @@ class HippoRAG:
         :param query_ner_list:
         :return:
         """
-        query_ner_embeddings = self.get_embedding_with_mean_pooling(query_ner_list)
+        query_ner_embeddings = self.embed_model.encode_text(query_ner_list)
 
         # Get Closest Entity Nodes
         prob_vectors = query_ner_embeddings.matmul(self.kb_only_mat.T).cpu().numpy()
@@ -688,19 +644,3 @@ class HippoRAG:
                 response_content = {'named_entities': []}
 
         return response_content, total_tokens
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str)
-    parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
-    parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo-1106')
-    parser.add_argument('--retrieval_model', type=str, choices=['facebook/contriever', 'colbertv2'])
-    parser.add_argument('--doc_ensemble', type=bool, action='store_true')
-    args = parser.parse_args()
-
-    hipporag = HippoRAG(args.dataset_name, args.llm, args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble)
-
-    queries = ["Which Stanford University professor works on Alzheimer's"]
-    for query in queries:
-        ranks, scores, logs = hipporag.rank_docs(query, top_k=10)

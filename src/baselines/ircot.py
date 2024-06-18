@@ -6,7 +6,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 
 from src.langchain_util import init_langchain_model, num_tokens_by_tiktoken
-from src.baselines import mean_pooling_embedding_with_normalization
+from src.processing import mean_pooling_embedding_with_normalization
 from src.elastic_search_tool import search_with_score
 import numpy as np
 from sentence_transformers import SentenceTransformer
