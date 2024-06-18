@@ -15,9 +15,19 @@ conda create -n hipporag python=3.9
 conda activate hipporag
 pip install -r requirements.txt
 
-GPU_DEVICES=0,1,2,3 #Replace with your own free GPU Devices
+GPUS=0,1,2,3 #Replace with your own free GPU Devices
+```
+
+Add conda env to PATH as follows, where `/path/HippoRAG` is the root of HippoRAG, and `/path/HippoRAG/hipporag` is the path to the cond env. Consider adding this to your ~/.bashrc
+```shell
+export PATH=$PATH:/path/HippoRAG/hipporag/bin 
+```
+
+Setup LLM API keys: TOGETHER_API_KEY is optional and set it when you want to use their open-source models (e.g., Llama-3).
+
+```shell
 export OPENAI_API_KEY='Add your own OpenAI API key here.'
-export TOGETHER_API_KEY='Add your own TogetherAI API key here.'  # If you need to use TogetherAI models such as Llama-3 API
+export TOGETHER_API_KEY='Add your own TogetherAI API key here.'
 ```
 
 To use ColBERTv2, download the pre-trained [checkpoint](https://downloads.cs.stanford.edu/nlp/data/colbert/colbertv2/colbertv2.0.tar.gz) and put it under `exp/colbertv2.0`.
@@ -211,7 +221,7 @@ Using our HippoRAG framework requires a two-step process, indexing and retrieval
 To run indexing for both our main experiments and our ablations, run the following bash scripts. Retrieval will fail if this step does not succeed.
 
 ```shell
-bash src/setup_hipporag_main_exps.sh $GPU_DEVICES
+bash src/setup_hipporag_main_exps.sh $GPUS
 ```
 
 #### HippoRAG Retrieval
@@ -234,7 +244,7 @@ bash src/run_hipporag_ircot_main_exps.sh
 To run all our ablations, run the following bash scripts:
 
 ```shell
-bash src/setup_hipporag_ablations.sh $GPU_DEVICES
+bash src/setup_hipporag_ablations.sh $GPUS
 bash src/run_hipporag_ablations.sh
 ```
 
@@ -243,7 +253,7 @@ bash src/run_hipporag_ablations.sh
 To reproduce our hyperparameter tuning, we must first run indexing on the MuSiQue training subset by running the following script:
 
 ```shell
-bash src/setup_hipporag_hyperparameter_tune.sh $GPU_DEVICES
+bash src/setup_hipporag_hyperparameter_tune.sh $GPUS
 ```
 
 After indexing is completed, run the following script and note the performance of each hyperparameter combination tested.
@@ -263,7 +273,7 @@ To run the case study examples shown in our paper, which we also include in our 
 #### Indexing
 
 ```shell
-bash src/setup_hipporag_case_study.sh $GPU_DEVICES
+bash src/setup_hipporag_case_study.sh $GPUS
 ```
 
 #### Retrieval

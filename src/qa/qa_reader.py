@@ -48,13 +48,18 @@ def qa_read(query: str, passages: list, few_shot: list, client):
 
     instruction = cot_system_instruction if len(passages) else cot_system_instruction_no_doc
     messages = [SystemMessage(instruction)]
-    for sample in few_shot:
-        if 'document' in sample:  # document and question from user
-            cur_sample = f'{sample["document"]}\n\nQuestion: {sample["question"]}'
-        else:  # no document, only question from user
-            cur_sample = f'Question: {sample["question"]}'
-        messages.append(HumanMessage(cur_sample + '\nThought: '))
-        messages.append(AIMessage(f'{sample["thought"]}\nAnswer: {sample["answer"]}'))
+    if few_shot:
+        for sample in few_shot:
+            if 'document' in sample:  # document and question from user
+                cur_sample = f'{sample["document"]}\n\nQuestion: {sample["question"]}'
+            else:  # no document, only question from user
+                cur_sample = f'Question: {sample["question"]}'
+            if 'thought' in sample:  # Chain-of-Thought
+                messages.append(HumanMessage(cur_sample + '\nThought: '))
+                messages.append(AIMessage(f'{sample["thought"]}\nAnswer: {sample["answer"]}'))
+            else:  # No Chain-of-Thought, directly answer the question
+                messages.append(HumanMessage(cur_sample + '\nAnswer: '))
+                messages.append(AIMessage(f'Answer: {sample["answer"]}'))
 
     user_prompt = ''
     for passage in passages:
@@ -62,7 +67,10 @@ def qa_read(query: str, passages: list, few_shot: list, client):
     user_prompt += 'Question: ' + query + '\nThought: '
     messages.append(HumanMessage(user_prompt))
 
-    assert len(messages) == len(few_shot) * 2 + 2
+    if few_shot:
+        assert len(messages) == len(few_shot) * 2 + 2
+    else:
+        assert len(messages) == 2
     messages = ChatPromptTemplate.from_messages(messages).format_prompt()
     try:
         chat_completion = client.invoke(messages.to_messages())

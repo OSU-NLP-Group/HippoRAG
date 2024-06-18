@@ -21,7 +21,7 @@ from transformers import AutoModel, AutoTokenizer
 import json
 import torch
 
-from src.langchain_util import init_langchain_model
+from src.langchain_util import init_langchain_model, LangChainModel
 from src.named_entity_extraction_parallel import query_prompt_one_shot_input, query_prompt_one_shot_output, query_prompt_template
 from src.processing import processing_phrases, mean_pooling, extract_json_dict
 
@@ -36,12 +36,14 @@ def min_max_normalize(x):
 
 class HippoRAG:
 
-    def __init__(self, corpus_name='hotpotqa', extraction_model='openai', extraction_model_name='gpt-3.5-turbo-1106', retrieval_model_name='facebook/contriever',
-                 extraction_type='ner', graph_type='facts_and_sim', sim_threshold=0.8, node_specificity=True, doc_ensemble=False,
-                 colbert_config=None, dpr_only=False, graph_alg='ppr', damping=0.1, recognition_threshold=0.9):
+    def __init__(self, corpus_name='hotpotqa', extraction_model='openai', extraction_model_name='gpt-3.5-turbo-1106',
+                 retrieval_model_name='facebook/contriever', extraction_type='ner', graph_type='facts_and_sim', sim_threshold=0.8, node_specificity=True, doc_ensemble=False,
+                 colbert_config=None, dpr_only=False, graph_alg='ppr', damping=0.1, recognition_threshold=0.9,
+                 qa_model: LangChainModel = None):
         """
         @param corpus_name: Name of the dataset to use for retrieval
-        @param extraction_model_name: LLM used for query NER
+        @param extraction_model: LLM provider for query NER, e.g., 'openai' or 'together'
+        @param extraction_model_name: LLM name used for query NER
         @param retrieval_model_name: Retrieval encoder used to link query named entities with query nodes
         @param extraction_type: Type of NER extraction during indexing
         @param graph_type: Type of graph used by HippoRAG
@@ -53,6 +55,7 @@ class HippoRAG:
         @param graph_alg: Type of graph algorithm to be used for retrieval, defaults ot PPR
         @param damping: Damping factor for PPR
         @param recognition_threshold: Threshold used for uncertainty-based ensembling.
+        @param qa_model: QA model
         """
 
         self.corpus_name = corpus_name
@@ -124,6 +127,15 @@ class HippoRAG:
 
         self.statistics = {}
         self.ensembling_debug = []
+        self.qa_model = init_langchain_model(qa_model.provider, qa_model.model_name)
+
+    def get_passage_by_idx(self, passage_idx):
+        """
+        Get the passage by its index
+        @param passage_idx: the index of the passage
+        @return: the passage
+        """
+        return self.dataset_df.iloc[passage_idx]['paragraph']
 
     def get_extraction_by_passage_idx(self, passage_idx, chunk=False):
         """
