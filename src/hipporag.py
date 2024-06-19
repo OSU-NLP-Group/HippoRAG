@@ -18,8 +18,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from tqdm import tqdm
 
+from src.colbertv2_indexing import colbertv2_index
 from src.langchain_util import init_langchain_model, LangChainModel
-from src.llm.util import init_embedding_model
+from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import query_prompt_one_shot_input, query_prompt_one_shot_output, query_prompt_template
 from src.processing import processing_phrases, extract_json_dict
 
@@ -117,10 +118,13 @@ class HippoRAG:
             self.get_dpr_doc_embedding()
 
         if self.retrieval_model_name == 'colbertv2':
-            with Run().context(RunConfig(nranks=1, experiment="phrase", root=self.colbert_config['root'])):
-                config = ColBERTConfig(root=self.colbert_config['root'], )
-                self.phrase_searcher = Searcher(index=self.colbert_config['phrase_index_name'], config=config, verbose=0)
+            if self.dpr_only is False or self.doc_ensemble:
+                colbertv2_index(self.phrases.tolist(), self.corpus_name, 'phrase', self.colbert_config['phrase_index_name'], overwrite='reuse')
+                with Run().context(RunConfig(nranks=1, experiment="phrase", root=self.colbert_config['root'])):
+                    config = ColBERTConfig(root=self.colbert_config['root'], )
+                    self.phrase_searcher = Searcher(index=self.colbert_config['phrase_index_name'], config=config, verbose=0)
             if self.doc_ensemble or dpr_only:
+                colbertv2_index(self.dataset_df['paragraph'].tolist(), self.corpus_name, 'corpus', self.colbert_config['doc_index_name'], overwrite='reuse')
                 with Run().context(RunConfig(nranks=1, experiment="corpus", root=self.colbert_config['root'])):
                     config = ColBERTConfig(root=self.colbert_config['root'], )
                     self.corpus_searcher = Searcher(index=self.colbert_config['doc_index_name'], config=config, verbose=0)
@@ -196,20 +200,21 @@ class HippoRAG:
 
         if 'colbertv2' in self.retrieval_model_name:
             # Get Query Doc Scores
-            if self.doc_ensemble or self.dpr_only:
+            queries = Queries(path=None, data={0: query})
+            if self.doc_ensemble:
                 query_doc_scores = np.zeros(self.doc_to_phrases_mat.shape[0])
-
-                queries = Queries(path=None, data={0: query})
                 ranking = self.corpus_searcher.search_all(queries, k=self.doc_to_phrases_mat.shape[0])
-
-                max_query_score = self.get_colbert_max_score(query)
-
-                num_docs = 0
+                # max_query_score = self.get_colbert_max_score(query)
                 for doc_id, rank, score in ranking.data[0]:
                     query_doc_scores[doc_id] = score
 
-            if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
-                top_phrase_vectors, top_phrase_scores = self.get_top_phrase_vec_colbertv2(query_ner_list)
+                if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
+                    top_phrase_vectors, top_phrase_scores = self.get_top_phrase_vec_colbertv2(query_ner_list)
+            elif self.dpr_only:
+                query_doc_scores = np.zeros(len(self.dataset_df))
+                ranking = self.corpus_searcher.search_all(queries, k=len(self.dataset_df))
+                for doc_id, rank, score in ranking.data[0]:
+                    query_doc_scores[doc_id] = score
         else:  # dense retrieval model
             # Get Query Doc Scores
             if self.doc_ensemble or self.dpr_only:

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from transformers import AutoModel, AutoTokenizer
 
-from src.llm import EmbeddingModelWrapper
+from src.lm_wrapper import EmbeddingModelWrapper
 from src.processing import mean_pooling_embedding_with_normalization, mean_pooling_embedding
 
 

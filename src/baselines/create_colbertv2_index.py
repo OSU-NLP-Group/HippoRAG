@@ -1,9 +1,20 @@
 import argparse
 import json
 import os.path
-
 from colbert import Indexer
 from colbert.infra import Run, RunConfig, ColBERTConfig
+
+
+def run_colbertv2_index(dataset_name: str, index_name: str, corpus_tsv_path: str, checkpoint_path='exp/colbertv2.0', overwrite=False):
+    with Run().context(RunConfig(nranks=1, experiment="colbert", root=f"exp/{dataset_name}/")):
+        config = ColBERTConfig(
+            nbits=2,
+            root=f"exp/{dataset_name}/colbert",
+        )
+        indexer = Indexer(checkpoint=checkpoint_path, config=config)
+        indexer.index(name=index_name, collection=corpus_tsv_path, overwrite=overwrite)
+        print(f'Indexing done for dataset {dataset_name}, index {index_name}')
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -45,11 +56,4 @@ if __name__ == '__main__':
             f.write(f"{pid}\t\"{p}\"" + '\n')
     print(f'Corpus tsv saved: {corpus_tsv_path}', len(corpus_contents))
 
-    with Run().context(RunConfig(nranks=1, experiment="colbert", root=f"exp/{args.dataset}/")):
-        config = ColBERTConfig(
-            nbits=2,
-            root=f"exp/{args.dataset}/colbert",
-        )
-        indexer = Indexer(checkpoint=checkpoint_path, config=config)
-        indexer.index(name=f"{args.corpus}_nbits_2", collection=corpus_tsv_path, overwrite=True)
-        print(f'Indexing done for {args.corpus}_nbits_2')
+    run_colbertv2_index(args.dataset, args.corpus + '_nbits_2', corpus_tsv_path, 'exp/colbertv2.0', overwrite=True)

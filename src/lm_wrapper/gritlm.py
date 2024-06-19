@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from gritlm import GritLM
 
-from src.llm import EmbeddingModelWrapper
+from src.lm_wrapper import EmbeddingModelWrapper
 
 
 def gritlm_instruction(instruction):

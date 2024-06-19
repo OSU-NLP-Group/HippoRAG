@@ -1,5 +1,5 @@
-from src.llm.gritlm import GritWrapper
-from src.llm.huggingface_emb import HuggingFaceWrapper
+from src.lm_wrapper.gritlm import GritWrapper
+from src.lm_wrapper.huggingface_util import HuggingFaceWrapper
 
 
 def init_embedding_model(model_name):
