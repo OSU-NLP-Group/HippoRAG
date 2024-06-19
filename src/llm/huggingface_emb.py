@@ -1,5 +1,6 @@
 from typing import Union, List
 
+import numpy as np
 import torch
 from transformers import AutoModel, AutoTokenizer
 
@@ -21,7 +22,16 @@ class HuggingFaceWrapper(EmbeddingModelWrapper):
                 res = mean_pooling_embedding(text, self.tokenizer, self.model, self.device)
 
         if return_cpu:
-            res = res.to('cpu')
+            res = res.cpu()
         if return_numpy:
             res = res.numpy()
         return res
+
+    def get_query_doc_scores(self, query_vec: np.ndarray, doc_vecs: np.ndarray):
+        """
+
+        @param query_vec: query vector
+        @param doc_vecs: doc matrix
+        @return: a matrix of query-doc scores
+        """
+        return np.dot(doc_vecs, query_vec.T)

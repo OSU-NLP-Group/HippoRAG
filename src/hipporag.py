@@ -127,6 +127,8 @@ class HippoRAG:
 
         self.statistics = {}
         self.ensembling_debug = []
+        if qa_model is None:
+            qa_model = LangChainModel('openai', 'gpt-3.5-turbo')
         self.qa_model = init_langchain_model(qa_model.provider, qa_model.model_name)
 
     def get_passage_by_idx(self, passage_idx):
@@ -512,8 +514,8 @@ class HippoRAG:
 
             for doc in tqdm(self.dataset_df.itertuples(index=False), total=len(self.dataset_df),
                             desc='Embedding Documents'):
-                embeddings = self.embed_model.encode_text(doc.paragraph)
-                self.doc_embeddings.append(embeddings.cpu().numpy())
+                embeddings = self.embed_model.encode_text(doc.paragraph, return_cpu=True, return_numpy=True)
+                self.doc_embeddings.append(embeddings)
 
             self.doc_embedding_mat = np.concatenate(self.doc_embeddings, axis=0)  # (num docs, embedding dim)
             pickle.dump(self.doc_embedding_mat, open(cache_filename, 'wb'))

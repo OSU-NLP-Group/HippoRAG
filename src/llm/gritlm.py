@@ -1,4 +1,7 @@
 # See https://github.com/ContextualAI/gritlm
+import numpy
+import numpy as np
+import torch
 from gritlm import GritLM
 
 from src.llm import EmbeddingModelWrapper
@@ -28,14 +31,25 @@ class GritWrapper(EmbeddingModelWrapper):
             res = self.encode_list(text, instruction)
         else:
             raise ValueError(f"Expected str or list, got {type(text)}")
-        if return_cpu:
-            res = res.to('cpu')
-        if return_numpy:
-            res = res.numpy()
+        if isinstance(res, torch.Tensor):
+            if return_cpu:
+                res = res.cpu()
+            if return_numpy:
+                res = res.numpy()
+        if norm:
+            if isinstance(res, torch.Tensor):
+                res = res.T.divide(torch.linalg.norm(res, dim=1)).T
+            if isinstance(res, numpy.ndarray):
+                res = (res.T / numpy.linalg.norm(res, axis=1)).T
+        return res
 
-    def cosine_sim(self, query_rep, doc_rep):
-        from scipy.spatial.distance import cosine
-        return 1 - cosine(query_rep, doc_rep)
+    def get_query_doc_scores(self, query_vec: np.ndarray, doc_vecs: np.ndarray):
+        """
+        @param query_vec: query vector
+        @param doc_vecs: doc matrix
+        @return: a matrix of query-doc scores
+        """
+        return np.dot(doc_vecs, query_vec.T)
 
     def generate(self, messages: list, max_new_tokens=256, do_sample=False):
         """
