@@ -3,13 +3,13 @@ import argparse
 from glob import glob
 import os.path
 
+import ipdb
 import pandas as pd
 
 import pickle
 import numpy as np
 import os
 from tqdm import tqdm
-import torch
 
 import faiss
 import gc
@@ -19,12 +19,6 @@ from processing import *
 
 # TODO: Change hard-coded vector output directory
 VECTOR_DIR = 'data/lm_vectors'
-
-
-def mean_pooling(token_embeddings, mask):
-    token_embeddings = token_embeddings.masked_fill(~mask[..., None].bool(), 0.)
-    sentence_embeddings = token_embeddings.sum(dim=1) / mask.sum(dim=1)[..., None]
-    return sentence_embeddings
 
 
 class RetrievalModule:
@@ -121,7 +115,6 @@ class RetrievalModule:
         return lengths_df.sort_values(0)
 
     def save_vecs(self, strings, vectors, direc_name, bin_size=50000):
-
         with open(direc_name + '/encoded_strings.txt', 'w') as f:
             for string in strings:
                 f.write(string + '\n')
@@ -379,11 +372,9 @@ class RetrievalModule:
         return sorted_candidate_dictionary
 
 
-import sys
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--retriever_name', type=str)
+    parser.add_argument('--retriever_name', type=str, help='retrieval model name, e.g., "facebook/contriever"')
     parser.add_argument('--string_filename', type=str)
     parser.add_argument('--pool_method', type=str, default='mean')
 

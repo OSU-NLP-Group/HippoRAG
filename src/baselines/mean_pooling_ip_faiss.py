@@ -1,6 +1,8 @@
 import os
 import sys
 
+from src.processing import mean_pooling, mean_pooling_embedding_with_normalization
+
 sys.path.append('.')
 
 import argparse
@@ -11,7 +13,6 @@ import faiss
 import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
-from src.baselines import mean_pooling_embedding_with_normalization, mean_pooling
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
