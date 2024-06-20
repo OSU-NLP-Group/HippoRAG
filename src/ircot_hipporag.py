@@ -165,11 +165,11 @@ if __name__ == '__main__':
         dpr_only_str = 'hipporag'
 
     if args.graph_alg == 'ppr':
-        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.retrieval_model_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_sim_thresh_{args.sim_threshold}'
+        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.graph_creating_retriever_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_sim_thresh_{args.sim_threshold}'
         if args.damping != 0.1:
             output_path += f'_damping_{args.damping}'
     else:
-        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.retrieval_model_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_sim_thresh_{args.sim_threshold}'
+        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.graph_creating_retriever_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_sim_thresh_{args.sim_threshold}'
 
     if args.wo_node_spec:
         output_path += 'wo_node_spec'

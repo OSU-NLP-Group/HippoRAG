@@ -1,6 +1,7 @@
 import json
 import re
 
+import numpy as np
 import torch
 
 
@@ -52,3 +53,7 @@ def extract_json_dict(text):
             return ''
     else:
         return ''
+
+
+def min_max_normalize(x):
+    return (x - np.min(x)) / (np.max(x) - np.min(x))

@@ -1,14 +1,10 @@
 import copy
 
-import ipdb
-import numpy as np
 import pandas as pd
 from scipy.sparse import csr_array
 from processing import *
 from glob import glob
-from nltk.corpus import stopwords
 
-stop_words = set(stopwords.words('english'))
 import os
 import json
 from tqdm import tqdm
@@ -17,65 +13,36 @@ import argparse
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
-if __name__ == '__main__':
-    # Get the first argument
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str)
-    parser.add_argument('--model_name', type=str)
-    parser.add_argument('--extraction_model', type=str)
-    parser.add_argument('--threshold', type=float)
-    parser.add_argument('--create_graph', action='store_true')
-    parser.add_argument('--extraction_type', type=str)
-    parser.add_argument('--cosine_sim_edges', action='store_true')
 
-    args = parser.parse_args()
-
-    # Get the first argument
-    dataset = args.dataset
-    model_name = args.model_name
-    processed_model_name = model_name.replace('/', '_').replace('.', '')
-    extraction_model = args.extraction_model.replace('/', '_')
-    threshold = args.threshold
-    create_graph_flag = args.create_graph
-    extraction_type = args.extraction_type
-    cosine_sim_edges = args.cosine_sim_edges
-
+def create_graph(dataset: str, extraction_type: str, extraction_model: str, retriever_name: str, processed_retriever_name: str, threshold: float = 0.9,
+                 create_graph_flag: bool = False, cosine_sim_edges: bool = False):
     version = 'v3'
-
     inter_triple_weight = 1.0
     similarity_max = 1.0
-
     possible_files = glob('output/openie_{}_results_{}_{}_*.json'.format(dataset, extraction_type, extraction_model))
     max_samples = np.max([int(file.split('{}_'.format(extraction_model))[1].split('.json')[0]) for file in possible_files])
     extracted_file = json.load(open('output/openie_{}_results_{}_{}_{}.json'.format(dataset, extraction_type, extraction_model, max_samples), 'r'))
-    extracted_triples = extracted_file['docs']
 
+    extracted_triples = extracted_file['docs']
     if extraction_model != 'gpt-3.5-turbo-1106':
         extraction_type = extraction_type + '_' + extraction_model
-
-    phrase_type = 'ents_only_lower_preprocess'
-
+    phrase_type = 'ents_only_lower_preprocess'  # entities only, lower case, preprocessed
     if cosine_sim_edges:
-        graph_type = 'facts_and_sim'
+        graph_type = 'facts_and_sim'  # extracted facts and similar phrases
     else:
         graph_type = 'facts'
 
     passage_json = []
-
     phrases = []
     entities = []
     relations = {}
-
     incorrectly_formatted_triples = []
     triples_wo_ner_entity = []
     triple_tuples = []
-
     full_neighborhoods = {}
-
     correct_wiki_format = 0
 
     for i, row in tqdm(enumerate(extracted_triples), total=len(extracted_triples)):
-
         document = row['passage']
         raw_ner_entities = row['extracted_entities']
         ner_entities = [processing_phrases(p) for p in row['extracted_entities']]
@@ -153,10 +120,8 @@ if __name__ == '__main__':
         queries_full = queries_full.loc[questions]
     except:
         queries_full = pd.DataFrame([], columns=['question', 'triples'])
-
     q_entities = []
     q_entities_by_doc = []
-
     for doc_ents in tqdm(queries_full.triples):
         doc_ents = eval(doc_ents)['named_entities']
         try:
@@ -165,37 +130,26 @@ if __name__ == '__main__':
             clean_doc_ents = []
         q_entities.extend(clean_doc_ents)
         q_entities_by_doc.append(clean_doc_ents)
-
     unique_phrases = list(np.unique(entities))
     unique_relations = np.unique(list(relations.values()) + ['equivalent'])
     q_phrases = list(np.unique(q_entities))
-
     all_phrases = copy.deepcopy(unique_phrases)
     all_phrases.extend(q_phrases)
-
     kb = pd.DataFrame(unique_phrases, columns=['strings'])
     kb2 = copy.deepcopy(kb)
-
     kb['type'] = 'query'
     kb2['type'] = 'kb'
-
     kb_full = pd.concat([kb, kb2])
     kb_full.to_csv('output/kb_to_kb.tsv', sep='\t')
-
     rel_kb = pd.DataFrame(unique_relations, columns=['strings'])
     rel_kb2 = copy.deepcopy(rel_kb)
-
     rel_kb['type'] = 'query'
     rel_kb2['type'] = 'kb'
-
     rel_kb_full = pd.concat([rel_kb, rel_kb2])
     rel_kb_full.to_csv('output/rel_kb_to_kb.tsv', sep='\t')
-
     query_df = pd.DataFrame(q_phrases, columns=['strings'])
-
     query_df['type'] = 'query'
     kb['type'] = 'kb'
-
     kb_query = pd.concat([kb, query_df])
     kb_query.to_csv('output/query_to_kb.tsv', sep='\t')
 
@@ -296,10 +250,10 @@ if __name__ == '__main__':
 
         # Expanding OpenIE triples with cosine similarity-based synonymy edges
         if cosine_sim_edges:
-            if 'colbert' in model_name:
-                kb_similarity = pickle.load(open('data/lm_vectors/colbert/nearest_neighbor_kb_to_kb.p'.format(processed_model_name), 'rb'))
+            if 'colbert' in retriever_name:
+                kb_similarity = pickle.load(open('data/lm_vectors/colbert/nearest_neighbor_kb_to_kb.p'.format(processed_retriever_name), 'rb'))
             else:
-                kb_similarity = pickle.load(open('data/lm_vectors/{}_mean/nearest_neighbor_kb_to_kb.p'.format(processed_model_name), 'rb'))
+                kb_similarity = pickle.load(open('data/lm_vectors/{}_mean/nearest_neighbor_kb_to_kb.p'.format(processed_retriever_name), 'rb'))
 
             print('Augmenting Graph from Similarity')
 
@@ -350,12 +304,12 @@ if __name__ == '__main__':
                 synonym_candidates.append((phrase, synonyms))
 
             pickle.dump(synonym_candidates, open(
-                'output/{}_similarity_edges_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, threshold, phrase_type, extraction_type, processed_model_name, version), 'wb'))
+                'output/{}_similarity_edges_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, threshold, phrase_type, extraction_type, processed_retriever_name, version), 'wb'))
         else:
             graph_plus = graph
 
         pickle.dump(relations,
-                    open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, processed_model_name, version), 'wb'))
+                    open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, processed_retriever_name, version), 'wb'))
 
         print('Saving Graph')
 
@@ -377,10 +331,36 @@ if __name__ == '__main__':
 
         if similarity_max == 1.0:
             pickle.dump(graph_plus, open(
-                'output/{}_{}_graph_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, threshold, phrase_type, extraction_type, processed_model_name, version), 'wb'))
+                'output/{}_{}_graph_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, threshold, phrase_type,
+                                                                                extraction_type, processed_retriever_name, version), 'wb'))
         else:
             pickle.dump(graph_plus, open(
-                'output/{}_{}_graph_mean_{}_thresh_{}_{}_sim_max_{}_{}.{}.subset.p'.format(dataset, graph_type, threshold, phrase_type, extraction_type, similarity_max,
-                                                                                           processed_model_name, version), 'wb'))
+                'output/{}_{}_graph_mean_{}_thresh_{}_{}_sim_max_{}_{}.{}.subset.p'.format(dataset, graph_type, threshold,
+                                                                                           phrase_type, extraction_type, similarity_max, processed_retriever_name, version), 'wb'))
 
-        json.dump(graph_json, open('output/{}_{}_graph_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
+        json.dump(graph_json, open('output/{}_{}_graph_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type,
+                                                                                                   extraction_type, version), 'w'))
+
+
+if __name__ == '__main__':
+    # Get the first argument
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset', type=str)
+    parser.add_argument('--model_name', type=str)
+    parser.add_argument('--extraction_model', type=str)
+    parser.add_argument('--threshold', type=float)
+    parser.add_argument('--create_graph', action='store_true')
+    parser.add_argument('--extraction_type', type=str)
+    parser.add_argument('--cosine_sim_edges', action='store_true')
+
+    args = parser.parse_args()
+    dataset = args.dataset
+    retriever_name = args.model_name
+    processed_retriever_name = retriever_name.replace('/', '_').replace('.', '')
+    extraction_model = args.extraction_model.replace('/', '_')
+    threshold = args.threshold
+    create_graph_flag = args.create_graph
+    extraction_type = args.extraction_type
+    cosine_sim_edges = args.cosine_sim_edges
+
+    create_graph(dataset, extraction_type, extraction_model, retriever_name, processed_retriever_name, threshold, create_graph_flag, cosine_sim_edges)

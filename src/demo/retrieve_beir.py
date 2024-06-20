@@ -76,7 +76,8 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, help='dataset name and split, e.g., `sci_fact_test`, `fiqa_dev`.')
     parser.add_argument('--chunk', action='store_true')
     parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo-1106')
-    parser.add_argument('--retrieval_model', type=str, help="model name, e.g., 'facebook/contriever', 'colbertv2'")
+    parser.add_argument('--retrieval_model', type=str, help="Graph creating retriever name, e.g., 'facebook/contriever', 'colbertv2'")
+    parser.add_argument('--linking_model', type=str, help="Node linking model name, e.g., 'facebook/contriever', 'colbertv2'")
     parser.add_argument('--doc_ensemble', action='store_true')
     parser.add_argument('--dpr_only', action='store_true')
     args = parser.parse_args()
@@ -87,16 +88,20 @@ if __name__ == '__main__':
     assert not (args.doc_ensemble and args.dpr_only)
     corpus = json.load(open(f'data/{args.dataset}_corpus.json'))
     qrel = json.load(open(f'data/{args.dataset}_qrel.json'))  # note that this is json file processed from tsv file, used for pytrec_eval
-    hipporag = HippoRAG(args.dataset, 'openai', args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only)
+    hipporag = HippoRAG(args.dataset, 'openai', args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only,
+                        linking_retriever_name=args.linking_model)
 
     with open(f'data/{args.dataset}_queries.json') as f:
         queries = json.load(f)
 
     doc_ensemble_str = 'doc_ensemble' if args.doc_ensemble else 'no_ensemble'
     extraction_str = args.extraction_model.replace('/', '_').replace('.', '_')
-    retrieval_str = args.retrieval_model.replace('/', '_').replace('.', '_')
+    graph_creating_str = args.retrieval_model.replace('/', '_').replace('.', '_')
+    if args.linking_model is None:
+        args.linking_model = args.retrieval_model
+    linking_str = args.linking_model.replace('/', '_').replace('.', '_')
     dpr_only_str = '_dpr_only' if args.dpr_only else ''
-    run_output_path = f'exp/{args.dataset}_run_{doc_ensemble_str}_{extraction_str}_{retrieval_str}{dpr_only_str}.json'
+    run_output_path = f'exp/{args.dataset}_run_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}_{linking_str}{dpr_only_str}.json'
 
     metrics = {'map', 'ndcg'}
     evaluator = pytrec_eval.RelevanceEvaluator(qrel, metrics)
@@ -139,7 +144,7 @@ if __name__ == '__main__':
     print(f'Evaluation results: {avg_scores}')
 
     logs = detailed_log(queries, run_dict, eval_res, args.chunk, dpr_only=args.dpr_only)
-    detailed_log_output_path = f'exp/{args.dataset}_log_{doc_ensemble_str}_{extraction_str}_{retrieval_str}{dpr_only_str}.json'
+    detailed_log_output_path = f'exp/{args.dataset}_log_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}{linking_str}{dpr_only_str}.json'
     with open(detailed_log_output_path, 'w') as f:
         json.dump(logs, f)
     print(f'Detailed log saved to {detailed_log_output_path}')

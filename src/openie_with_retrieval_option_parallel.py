@@ -1,8 +1,8 @@
 import sys
 
-from langchain_community.chat_models import ChatOllama
-
 sys.path.append('.')
+
+from langchain_community.chat_models import ChatOllama
 
 import argparse
 import json
@@ -244,28 +244,26 @@ if __name__ == '__main__':
 
     new_json = []
     all_entities = []
-    chatgpt_total_tokens = 0
+    lm_total_tokens = 0
 
     for output in outputs:
         new_json.extend(output[0])
         all_entities.extend(output[1])
-        chatgpt_total_tokens += output[2]
+        lm_total_tokens += output[2]
 
     if not (already_done):
         avg_ent_chars = np.mean([len(e) for e in all_entities])
         avg_ent_words = np.mean([len(e.split()) for e in all_entities])
 
         # Current Cost
-        cost_per_1000_tokens = 0.002
-        current_cost = cost_per_1000_tokens * chatgpt_total_tokens / 1000
-        approx_total_cost = (len(retrieval_corpus) / num_passages) * current_cost
+        approx_total_tokens = (len(retrieval_corpus) / num_passages) * lm_total_tokens
 
         extra_info_json = {"docs": new_json,
                            "ents_by_doc": ents_by_doc,
                            "avg_ent_chars": avg_ent_chars,
                            "avg_ent_words": avg_ent_words,
-                           "current_cost": current_cost,
-                           "approx_total_cost": approx_total_cost,
+                           "num_tokens": lm_total_tokens,
+                           "approx_total_tokens": approx_total_tokens,
                            }
         output_path = 'output/openie{}_results_{}.json'.format(dataset, arg_str)
         json.dump(extra_info_json, open(output_path, 'w'))

@@ -1,4 +1,6 @@
 # See https://github.com/ContextualAI/gritlm
+from typing import Union, List
+
 import numpy
 import numpy as np
 import torch
@@ -21,10 +23,10 @@ class GritWrapper(EmbeddingModelWrapper):
         """
         self.model = GritLM(model_name, torch_dtype='auto', **kwargs)
 
-    def encode_list(self, texts: list, instruction: str):
-        return self.model.encode(texts, instruction=gritlm_instruction(instruction))
+    def encode_list(self, texts: list, instruction: str, batch_size=96):
+        return self.model.encode(texts, instruction=gritlm_instruction(instruction), batch_size=batch_size)
 
-    def encode_text(self, text, instruction: str = '', norm=True, return_numpy=False, return_cpu=False):
+    def encode_text(self, text: Union[str, List], instruction: str = '', norm=True, return_numpy=False, return_cpu=False):
         if isinstance(text, str):
             text = [text]
         if isinstance(text, list):
@@ -39,8 +41,8 @@ class GritWrapper(EmbeddingModelWrapper):
         if norm:
             if isinstance(res, torch.Tensor):
                 res = res.T.divide(torch.linalg.norm(res, dim=1)).T
-            if isinstance(res, numpy.ndarray):
-                res = (res.T / numpy.linalg.norm(res, axis=1)).T
+            if isinstance(res, np.ndarray):
+                res = (res.T / np.linalg.norm(res, axis=1)).T
         return res
 
     def get_query_doc_scores(self, query_vec: np.ndarray, doc_vecs: np.ndarray):

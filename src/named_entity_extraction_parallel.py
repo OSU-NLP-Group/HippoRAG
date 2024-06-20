@@ -1,4 +1,5 @@
 import sys
+from functools import partial
 
 sys.path.append('.')
 
@@ -35,7 +36,7 @@ Question: {}
 """
 
 
-def named_entity_recognition(text: str):
+def named_entity_recognition(client, text: str):
     query_ner_prompts = ChatPromptTemplate.from_messages([SystemMessage("You're a very effective entity extraction system."),
                                                           HumanMessage(query_prompt_one_shot_input),
                                                           AIMessage(query_prompt_one_shot_output),
@@ -69,12 +70,12 @@ def named_entity_recognition(text: str):
     return response_content, total_tokens
 
 
-def run_ner_on_texts(texts):
+def run_ner_on_texts(client, texts):
     ner_output = []
     total_cost = 0
 
     for text in tqdm(texts):
-        ner, cost = named_entity_recognition(text)
+        ner, cost = named_entity_recognition(client, text)
         ner_output.append(ner)
         total_cost += cost
 
@@ -127,10 +128,11 @@ if __name__ == '__main__':
                 args.append([queries[i] for i in split])
 
             if num_processes == 1:
-                outputs = [run_ner_on_texts(args[0])]
+                outputs = [run_ner_on_texts(client, args[0])]
             else:
+                partial_func = partial(run_ner_on_texts, client)
                 with Pool(processes=num_processes) as pool:
-                    outputs = pool.map(run_ner_on_texts, args)
+                    outputs = pool.map(partial_func, args)
 
             chatgpt_total_tokens = 0
 
