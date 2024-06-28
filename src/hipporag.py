@@ -190,14 +190,14 @@ class HippoRAG:
                 # max_query_score = self.get_colbert_max_score(query)
                 for doc_id, rank, score in ranking.data[0]:
                     query_doc_scores[doc_id] = score
-
-                if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
-                    all_phrase_weights, linking_score_map = self.link_node_by_colbertv2(query_ner_list)
             elif self.dpr_only:
                 query_doc_scores = np.zeros(len(self.dataset_df))
                 ranking = self.corpus_searcher.search_all(queries, k=len(self.dataset_df))
                 for doc_id, rank, score in ranking.data[0]:
                     query_doc_scores[doc_id] = score
+
+            if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
+                all_phrase_weights, linking_score_map = self.link_node_by_colbertv2(query_ner_list)
         else:  # dense retrieval model
             # Get Query Doc Scores
             if self.doc_ensemble or self.dpr_only:
@@ -471,6 +471,8 @@ class HippoRAG:
         if os.path.isfile(encoded_string_path):
             self.load_node_vectors_from_string_encoding_cache(encoded_string_path)
         else:  # use another way to load node vectors
+            if self.linking_retriever_name == 'colbertv2':
+                return
             kb_node_phrase_embeddings_path = 'data/lm_vectors/{}_mean/{}_kb_node_phrase_embeddings.p'.format(self.linking_retriever_name_processed, self.corpus_name)
             if os.path.isfile(kb_node_phrase_embeddings_path):
                 self.kb_node_phrase_embeddings = pickle.load(open(kb_node_phrase_embeddings_path, 'rb'))
