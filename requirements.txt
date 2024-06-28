@@ -140,3 +140,4 @@ langchain-openai
 langchain-together
 langchain_community
 pytrec_eval
+gritlm
