@@ -116,12 +116,12 @@ class HippoRAG:
 
         if self.linking_retriever_name == 'colbertv2':
             if self.dpr_only is False or self.doc_ensemble:
-                colbertv2_index(self.phrases.tolist(), self.corpus_name, 'phrase', self.colbert_config['phrase_index_name'], overwrite='reuse')
+                colbertv2_index(self.phrases.tolist(), self.corpus_name, 'phrase', self.colbert_config['phrase_index_name'], overwrite=True)
                 with Run().context(RunConfig(nranks=1, experiment="phrase", root=self.colbert_config['root'])):
                     config = ColBERTConfig(root=self.colbert_config['root'], )
                     self.phrase_searcher = Searcher(index=self.colbert_config['phrase_index_name'], config=config, verbose=0)
             if self.doc_ensemble or dpr_only:
-                colbertv2_index(self.dataset_df['paragraph'].tolist(), self.corpus_name, 'corpus', self.colbert_config['doc_index_name'], overwrite='reuse')
+                colbertv2_index(self.dataset_df['paragraph'].tolist(), self.corpus_name, 'corpus', self.colbert_config['doc_index_name'], overwrite=True)
                 with Run().context(RunConfig(nranks=1, experiment="corpus", root=self.colbert_config['root'])):
                     config = ColBERTConfig(root=self.colbert_config['root'], )
                     self.corpus_searcher = Searcher(index=self.colbert_config['doc_index_name'], config=config, verbose=0)
