@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append('.')
+
 import _pickle as pickle
 import argparse
 from glob import glob
