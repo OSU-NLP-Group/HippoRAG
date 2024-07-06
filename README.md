@@ -98,7 +98,7 @@ The corpus and optional query JSON files should have the following format:
 
 #### (Optional) Chunking Corpus
 
-When preparing your corpus data, you may need to chunk each passage, as longer passage maybe too complex for the OpenIE process. Check `src/data_process/util.py` to chunk your whole corpus if you need.
+When preparing your corpus data, you may need to chunk each passage, as longer passage may be too complex for the OpenIE process. Check `src/data_process/util.py` to chunk your whole corpus if you need.
 
 ### Integration with LangChain
 
