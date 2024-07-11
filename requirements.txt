@@ -41,7 +41,7 @@ GitPython==3.1.42
 h11==0.14.0
 httpcore==1.0.3
 httpx==0.26.0
-huggingface-hub==0.20.3
+huggingface-hub==0.23.4
 idna==3.6
 igraph==0.11.4
 importlib-metadata==7.0.1
