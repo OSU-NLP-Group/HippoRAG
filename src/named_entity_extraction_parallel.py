@@ -4,7 +4,7 @@ from functools import partial
 sys.path.append('.')
 
 from src.processing import extract_json_dict
-from langchain_community.chat_models import ChatOllama
+from langchain_community.chat_models import ChatOllama, ChatLlamaCpp
 
 sys.path.append('.')
 import argparse
@@ -49,7 +49,7 @@ def named_entity_recognition(client, text: str):
         response_content = chat_completion.content
         total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
         json_mode = True
-    elif isinstance(client, ChatOllama):
+    elif isinstance(client, ChatOllama) or isinstance(client, ChatLlamaCpp):
         response_content = client.invoke(query_ner_messages.to_messages())
         response_content = extract_json_dict(response_content)
         total_tokens = len(response_content.split())

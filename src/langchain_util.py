@@ -1,3 +1,4 @@
+import argparse
 import os
 
 import tiktoken
@@ -35,6 +36,23 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
         # https://python.langchain.com/v0.1/docs/integrations/chat/ollama/
         from langchain_community.chat_models import ChatOllama
         return ChatOllama(model=model_name)  # e.g., 'llama3'
+    elif llm == 'llama.cpp':
+        # https://python.langchain.com/v0.2/docs/integrations/chat/llamacpp/
+        from langchain_community.chat_models import ChatLlamaCpp
+        return ChatLlamaCpp(model_path=model_name, verbose=True)  # model_name is the model path (gguf file)
     else:
         # add any LLMs you want to use here using LangChain
         raise NotImplementedError(f"LLM '{llm}' not implemented yet.")
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--llm', type=str)
+    parser.add_argument('--model_name', type=str)
+    parser.add_argument('--query', type=str, help='query text', default="who are you?")
+    args = parser.parse_args()
+
+    model = init_langchain_model(args.llm, args.model_name)
+    messages = [("system", "You are a helpful assistant. Please answer the question from the user."), ("human", args.query)]
+    completion = model.invoke(messages)
+    print(completion.content)
