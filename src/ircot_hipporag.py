@@ -201,6 +201,7 @@ if __name__ == '__main__':
             print('Results file maybe empty, cannot be loaded.')
             results = []
             processed_ids = set()
+            total_recall = {k: 0 for k in k_list}
 
     print(f'Loaded {len(results)} results from {output_path}')
     if len(results) > 0:
