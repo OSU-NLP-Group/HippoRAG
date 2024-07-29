@@ -2,7 +2,7 @@ import sys
 
 sys.path.append('.')
 
-from langchain_community.chat_models import ChatOllama
+from langchain_community.chat_models import ChatOllama, ChatLlamaCpp
 
 import argparse
 import json
@@ -40,7 +40,7 @@ def named_entity_recognition(passage: str):
                 response_content = chat_completion.content
                 response_content = eval(response_content)
                 total_tokens += chat_completion.response_metadata['token_usage']['total_tokens']
-            elif isinstance(client, ChatOllama):
+            elif isinstance(client, ChatOllama) or isinstance(client, ChatLlamaCpp):
                 response_content = client.invoke(ner_messages.to_messages())
                 response_content = extract_json_dict(response_content)
                 total_tokens += len(response_content.split())
@@ -72,7 +72,7 @@ def openie_post_ner_extract(passage: str, entities: list, model: str):
             chat_completion = client.invoke(openie_messages.to_messages(), temperature=0, max_tokens=4096, response_format={"type": "json_object"})
             response_content = chat_completion.content
             total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
-        elif isinstance(client, ChatOllama):
+        elif isinstance(client, ChatOllama) or isinstance(client, ChatLlamaCpp):
             response_content = client.invoke(openie_messages.to_messages())
             response_content = extract_json_dict(response_content)
             response_content = str(response_content)
