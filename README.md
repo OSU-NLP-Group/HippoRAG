@@ -320,11 +320,11 @@ The Ohio State University
 If you find this work useful, please consider citing our paper:
 
 ```
-@article{gutiérrez2024hipporag,
+@inproceedings{gutiérrez2024hipporag,
       title={HippoRAG: Neurobiologically Inspired Long-Term Memory for Large Language Models}, 
       author={Bernal Jiménez Gutiérrez and Yiheng Shu and Yu Gu and Michihiro Yasunaga and Yu Su},
-      journal={arXiv preprint arXiv:2405.14831},
+      booktitle={The Thirty-eighth Annual Conference on Neural Information Processing Systems},
       year={2024},
-      url={https://arxiv.org/abs/2405.14831}
+      url={https://openreview.net/forum?id=hkujvAPVsg}
 }
 ```
