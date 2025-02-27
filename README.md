@@ -340,7 +340,7 @@ When preparing your data, you may need to chunk each passage, as longer passage 
 │   │   ├── config_utils.py         # We use only one config across all modules and its setup is specified here
 |   |   ├── ...
 │   ├── __init__.py
-│   ├── hipporag.py          # Highest level class for initiating retrieval, question answering, and evaluations
+│   ├── HippoRAG.py          # Highest level class for initiating retrieval, question answering, and evaluations
 │   ├── embedding_store.py   # Storage database to load, manage and save embeddings for passages, entities and facts.
 │   ├── rerank.py            # Reranking and filtering methods
 │-- 📂 examples
