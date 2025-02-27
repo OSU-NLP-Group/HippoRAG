@@ -11,11 +11,11 @@
 [<img align="center" src="https://img.shields.io/badge/GitHub-HippoRAG 1-blue" />](https://github.com/OSU-NLP-Group/HippoRAG/tree/original)
 [<img align="center" src="https://discord.com/api/guilds/1344074245705302206/widget.png?style=shield" />](https://discord.gg/fh58dH6k)
 
-### HippoRAG 2 is a powerful memory framework for LLMs that unlocks their ability to identify and leverage connections within new knowledge, a key feature of human long-term memory.
+### HippoRAG 2 is a powerful memory framework for LLMs that enhances their ability to recognize and utilize connections in new knowledge—mirroring a key function of human long-term memory.
 
-Our experiments indicate that HippoRAG 2 enhances the `associativity` and `sense-making` abilities of even the most powerful standard RAG systems without compromising their strong performance on simpler tasks. 
+Our experiments show that HippoRAG 2 improves associativity (multi-hop reasoning) and sense-making (the process of integrating large and complex contexts) in even the most advanced RAG systems, without sacrificing their performance on simpler tasks.
 
-Just like the original version, HippoRAG 2's online processes remain efficient in terms of both LLM cost and latency, while its offline cost is significantly lower than other graph based solutions like GraphRAG or LightRAG.
+Like its predecessor, HippoRAG 2 remains cost- and latency-efficient in online processes, while using significantly fewer resources during offline indexing compared to other graph-based solutions such as GraphRAG, RAPTOR, and LightRAG.
 
 <p align="center">
   <img align="center" src="images/intro.png" />
