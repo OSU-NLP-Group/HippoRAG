@@ -1,1 +1,0 @@
-IRCoT prompts come from this [GitHub repo](https://github.com/stonybrooknlp/ircot?tab=Apache-2.0-1-ov-file#readme). We thank the original authors for sharing.
