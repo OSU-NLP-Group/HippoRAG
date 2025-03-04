@@ -5,7 +5,7 @@ with open("README.md", "r") as f:
 
 setuptools.setup(
     name="hipporag",
-    version="2.0.0-alpha.1",
+    version="2.0.0-alpha.2",
     author="Bernal Jimenez Gutierrez",
     author_email="jimenezgutierrez.1@osu.edu",
     description="A powerful graph-based RAG framework that enables LLMs to identify and leverage connections within new knowledge for improved retrieval.",

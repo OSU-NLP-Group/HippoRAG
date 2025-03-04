@@ -1,6 +1,6 @@
 <h1 align="center">HippoRAG 2: From RAG to Memory</h1>
 <p align="center">
-    <img src="images/hippo_brain.png" width="55%" style="max-width: 300px;">
+    <img src="https://github.com/OSU-NLP-Group/HippoRAG/raw/main/images/hippo_brain.png" width="55%" style="max-width: 300px;">
 </p>
 
 [<img align="center" src="https://colab.research.google.com/assets/colab-badge.svg" />](https://colab.research.google.com/drive/1nuelysWsXL8F5xH6q4JYJI8mvtlmeM9O#scrollTo=TjHdNe2KC81K)
@@ -18,7 +18,7 @@ Our experiments show that HippoRAG 2 improves associativity (multi-hop retrieval
 Like its predecessor, HippoRAG 2 remains cost and latency efficient in online processes, while using significantly fewer resources for offline indexing compared to other graph-based solutions such as GraphRAG, RAPTOR, and LightRAG.
 
 <p align="center">
-  <img align="center" src="images/intro.png" />
+  <img align="center" src="https://github.com/OSU-NLP-Group/HippoRAG/raw/main/images/intro.png" />
 </p>
 <p align="center">
   <b>Figure 1:</b> Evaluation of continual learning capabilities across three key dimensions: factual memory (NaturalQuestions, PopQA), sense-making (NarrativeQA), and associativity (MuSiQue, 2Wiki, HotpotQA, and LV-Eval). HippoRAG 2 surpasses other methods across all
@@ -26,7 +26,7 @@ categories, bringing it one step closer to true long-term memory.
 </p>
 
 <p align="center">
-  <img align="center" src="images/methodology.png" />
+  <img align="center" src="https://github.com/OSU-NLP-Group/HippoRAG/raw/main/images/methodology.png" />
 </p>
 <p align="center">
   <b>Figure 2:</b> HippoRAG 2 methodology.
