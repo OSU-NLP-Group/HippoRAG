@@ -46,8 +46,6 @@ class GritLMEmbeddingModel(BaseEmbeddingModel):
 
         config_dict = {
             "embedding_model_name": self.embedding_model_name,
-            "return_cpu": self.global_config.embedding_return_as_cpu,
-            "return_numpy": self.global_config.embedding_return_as_numpy,
             "norm": self.global_config.embedding_return_as_normalized,
             "model_init_params": {
                 "model_name_or_path": self.embedding_model_name,
@@ -57,11 +55,8 @@ class GritLMEmbeddingModel(BaseEmbeddingModel):
             },
             "encode_params": {
                 "batch_size": self.global_config.embedding_batch_size,
-                # "instruction": "",
             },
             "generate_params": {
-                # "max_new_tokens": 
-                # "do_sample": 
             }
         }
 
