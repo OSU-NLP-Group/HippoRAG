@@ -11,6 +11,7 @@ import openai
 from filelock import FileLock
 from openai import OpenAI
 from packaging import version
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from ..utils.config_utils import BaseConfig
 from ..utils.llm_utils import (
@@ -99,6 +100,14 @@ def cache_response(func):
 
     return wrapper
 
+def dynamic_retry_decorator(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        max_retries = getattr(self, "max_retries", 5)  
+        dynamic_retry = retry(stop=stop_after_attempt(max_retries), wait=wait_fixed(1))
+        decorated_func = dynamic_retry(func)
+        return decorated_func(self, *args, **kwargs)
+    return wrapper
 
 class CacheOpenAI(BaseLLM):
     """OpenAI LLM implementation."""
@@ -127,8 +136,8 @@ class CacheOpenAI(BaseLLM):
             client = httpx.Client(limits=limits, timeout=httpx.Timeout(5*60, read=5*60))
         else:
             client = None
-        max_retries = kwargs.get("max_retries", None)
-        self.openai_client = OpenAI(base_url=self.llm_base_url, api_key=api_key, http_client=client, max_retries=max_retries)
+        self.max_retries = kwargs.get("max_retries", 2)
+        self.openai_client = OpenAI(base_url=self.llm_base_url, api_key=api_key, http_client=client, max_retries=self.max_retries)
 
     def _init_llm_config(self, **kwargs) -> None:
         config_dict = {
@@ -146,6 +155,7 @@ class CacheOpenAI(BaseLLM):
         logger.debug(f"Init {self.__class__.__name__}'s llm_config: {self.llm_config}")
 
     @cache_response
+    @dynamic_retry_decorator
     def infer(
         self,
         messages: List[TextChatMessage],
@@ -164,7 +174,8 @@ class CacheOpenAI(BaseLLM):
         response = self.openai_client.chat.completions.create(**params)
 
         response_message = response.choices[0].message.content
-
+        assert isinstance(response_message, str), "response_message should be a string"
+        
         metadata = {
             "prompt_tokens": response.usage.prompt_tokens, 
             "completion_tokens": response.usage.completion_tokens,
