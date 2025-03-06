@@ -105,12 +105,13 @@ class CacheOpenAI(BaseLLM):
     @classmethod
     def from_experiment_config(cls, global_config: BaseConfig) -> "CacheOpenAI":
         config_dict = global_config.__dict__
+        config_dict['max_retries'] = global_config.max_retry_attempts
         cache_dir = os.path.join(global_config.save_dir, "llm_cache")
         return cls(cache_dir=cache_dir, **config_dict)
 
     def __init__(self, cache_dir, cache_filename: str = None,
                  llm_name: str = "gpt-4o-mini", api_key: str = None, llm_base_url: str = None, 
-                 high_throughput: bool = True,
+                 high_throughput: bool = False,
                  **kwargs) -> None:
         super().__init__()
         self.cache_dir = cache_dir
@@ -126,7 +127,8 @@ class CacheOpenAI(BaseLLM):
             client = httpx.Client(limits=limits, timeout=httpx.Timeout(5*60, read=5*60))
         else:
             client = None
-        self.openai_client = OpenAI(base_url=self.llm_base_url, api_key=api_key, http_client=client)
+        max_retries = kwargs.get("max_retries", None)
+        self.openai_client = OpenAI(base_url=self.llm_base_url, api_key=api_key, http_client=client, max_retries=max_retries)
 
     def _init_llm_config(self, **kwargs) -> None:
         config_dict = {
