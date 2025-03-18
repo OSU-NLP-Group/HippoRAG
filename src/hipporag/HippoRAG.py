@@ -15,6 +15,7 @@ import igraph as ig
 import numpy as np
 from collections import defaultdict
 import re
+import time
 
 from .llm import _get_llm_class, BaseLLM
 from .embedding_model import _get_embedding_model_class, BaseEmbeddingModel
@@ -134,6 +135,10 @@ class HippoRAG:
         self.rerank_filter = DSPyFilter(self)
 
         self.ready_to_retrieve = False
+
+        self.ppr_time = 0
+        self.rerank_time = 0
+        self.all_retrieval_time = 0
 
 
     def initialize_graph(self):
@@ -280,6 +285,7 @@ class HippoRAG:
         -----
         - Long queries with no relevant facts after reranking will default to results from dense passage retrieval.
         """
+        retrieve_start_time = time.time()  # Record start time
 
         if num_to_retrieve is None:
             num_to_retrieve = self.global_config.retrieval_top_k
@@ -293,9 +299,14 @@ class HippoRAG:
         self.get_query_embeddings(queries)
 
         retrieval_results = []
+
         for q_idx, query in tqdm(enumerate(queries), desc="Retrieving", total=len(queries)):
+            rerank_start = time.time()
             query_fact_scores = self.get_fact_scores(query)
             top_k_fact_indices, top_k_facts, rerank_log = self.rerank_facts(query, query_fact_scores)
+            rerank_end = time.time()
+
+            self.rerank_time += rerank_end - rerank_start
 
             if len(top_k_facts) == 0:
                 logger.info('No facts found after reranking, return DPR results')
@@ -311,6 +322,15 @@ class HippoRAG:
             top_k_docs = [self.chunk_embedding_store.get_row(self.passage_node_keys[idx])["content"] for idx in sorted_doc_ids[:num_to_retrieve]]
 
             retrieval_results.append(QuerySolution(question=query, docs=top_k_docs, doc_scores=sorted_doc_scores[:num_to_retrieve]))
+
+        retrieve_end_time = time.time()  # Record end time
+
+        self.all_retrieval_time += retrieve_end_time - retrieve_start_time
+
+        logger.info(f"Total Retrieval Time {self.all_retrieval_time:.2f}s")
+        logger.info(f"Total Recognition Memory Time {self.rerank_time:.2f}s")
+        logger.info(f"Total PPR Time {self.ppr_time:.2f}s")
+        logger.info(f"Total Misc Time {self.all_retrieval_time - (self.rerank_time + self.ppr_time):.2f}s")
 
         # Evaluate retrieval
         if gold_docs is not None:
@@ -1123,7 +1143,11 @@ class HippoRAG:
         assert sum(node_weights) > 0, f'No phrases found in the graph for the given facts: {top_k_facts}'
 
         #Running PPR algorithm based on the passage and phrase weights previously assigned
+        ppr_start = time.time()
         ppr_sorted_doc_ids, ppr_sorted_doc_scores = self.run_ppr(node_weights, damping=self.global_config.damping)
+        ppr_end = time.time()
+
+        self.ppr_time += (ppr_end - ppr_start)
 
         assert len(ppr_sorted_doc_ids) == len(
             self.passage_node_idxs), f"Doc prob length {len(ppr_sorted_doc_ids)} != corpus length {len(self.passage_node_idxs)}"
