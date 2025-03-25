@@ -12,6 +12,7 @@ from filelock import FileLock
 from openai import OpenAI
 from openai import AzureOpenAI
 from packaging import version
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from ..utils.config_utils import BaseConfig
 from ..utils.llm_utils import (
@@ -100,17 +101,28 @@ def cache_response(func):
 
     return wrapper
 
+def dynamic_retry_decorator(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        max_retries = getattr(self, "max_retries", 5)  
+        dynamic_retry = retry(stop=stop_after_attempt(max_retries), wait=wait_fixed(1))
+        decorated_func = dynamic_retry(func)
+        return decorated_func(self, *args, **kwargs)
+    return wrapper
 
 class CacheOpenAI(BaseLLM):
     """OpenAI LLM implementation."""
     @classmethod
     def from_experiment_config(cls, global_config: BaseConfig) -> "CacheOpenAI":
+        config_dict = global_config.__dict__
+        config_dict['max_retries'] = global_config.max_retry_attempts
         cache_dir = os.path.join(global_config.save_dir, "llm_cache")
         return cls(cache_dir=cache_dir, global_config=global_config)
 
     def __init__(self, cache_dir, global_config, cache_filename: str = None,
-                 llm_name: str = "gpt-4o-mini", api_key: str = None, llm_base_url: str = None, 
-                 high_throughput: bool = True) -> None:
+                 llm_name: str = "gpt-4o-mini", api_key: str = None, llm_base_url: str = None,
+                 high_throughput: bool = False,
+                 **kwargs) -> None:
         super().__init__()
         self.cache_dir = cache_dir
         self.global_config = global_config
@@ -128,11 +140,13 @@ class CacheOpenAI(BaseLLM):
         else:
             client = None
 
+        self.max_retries = kwargs.get("max_retries", 2)
+
         if self.global_config.azure_endpoint is None:
-            self.openai_client = OpenAI(base_url=self.llm_base_url, api_key=api_key, http_client=client)
+            self.openai_client = OpenAI(base_url=self.llm_base_url, api_key=api_key, http_client=client, max_retries=self.max_retries)
         else:
             self.openai_client = AzureOpenAI(api_version=self.global_config.azure_endpoint.split('api-version=')[1],
-                                             azure_endpoint=self.global_config.azure_endpoint)
+                                             azure_endpoint=self.global_config.azure_endpoint, max_retries=self.max_retries)
 
     def _init_llm_config(self, global_config) -> None:
         config_dict = global_config.__dict__
@@ -151,6 +165,7 @@ class CacheOpenAI(BaseLLM):
         logger.debug(f"Init {self.__class__.__name__}'s llm_config: {self.llm_config}")
 
     @cache_response
+    @dynamic_retry_decorator
     def infer(
         self,
         messages: List[TextChatMessage],
@@ -169,7 +184,8 @@ class CacheOpenAI(BaseLLM):
         response = self.openai_client.chat.completions.create(**params)
 
         response_message = response.choices[0].message.content
-
+        assert isinstance(response_message, str), "response_message should be a string"
+        
         metadata = {
             "prompt_tokens": response.usage.prompt_tokens, 
             "completion_tokens": response.usage.completion_tokens,
