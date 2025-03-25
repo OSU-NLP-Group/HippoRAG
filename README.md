@@ -390,8 +390,8 @@ If you find this work useful, please consider citing our papers:
 
 ## TODO:
 
-- [ ] Add support for more embedding models
+- [x] Add support for more embedding models
+- [x] Add support for embedding endpoints
 - [ ] Add support for vector database integration
-- [ ] Add support for embedding endpoints
 
 Please feel free to open an issue or PR if you have any questions or suggestions.

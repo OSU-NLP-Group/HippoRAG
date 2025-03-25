@@ -6,6 +6,7 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModel
 from openai import OpenAI
+from openai import AzureOpenAI
 
 from ..utils.config_utils import BaseConfig
 from ..utils.logging_utils import get_logger
@@ -29,7 +30,12 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
         logger.debug(
             f"Initializing {self.__class__.__name__}'s embedding model with params: {self.embedding_config.model_init_params}")
 
-        self.client = OpenAI()
+        if self.global_config.azure_embedding_endpoint is None:
+            self.client = OpenAI()
+        else:
+            self.client = AzureOpenAI(api_version=self.global_config.azure_embedding_endpoint.split('api-version=')[1],
+                                      azure_endpoint=self.global_config.azure_embedding_endpoint)
+
 
     def _init_embedding_config(self) -> None:
         """
@@ -62,6 +68,14 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
         self.embedding_config = EmbeddingConfig.from_dict(config_dict=config_dict)
         logger.debug(f"Init {self.__class__.__name__}'s embedding_config: {self.embedding_config}")
 
+    def encode(self, texts: List[str]):
+        texts = [t.replace("\n", " ") for t in texts]
+        texts = [t if t != '' else ' ' for t in texts]
+        response = self.client.embeddings.create(input=texts, model=self.embedding_model_name)
+        results = np.array([v.embedding for v in response.data])
+
+        return results
+
     def batch_encode(self, texts: List[str], **kwargs) -> None:
         if isinstance(texts, str): texts = [texts]
 
@@ -74,10 +88,23 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
             # del params["instruction"]
 
         logger.debug(f"Calling {self.__class__.__name__} with:\n{params}")
-        texts = [t.replace("\n", " ") for t in texts]
 
-        response = self.client.embeddings.create(input=texts, model=self.embedding_model_name)
-        results = np.array([v.embedding for v in response.data])
+        batch_size = params.pop("batch_size", 16)
+
+        if len(texts) <= batch_size:
+            results = self.encode(texts)
+        else:
+            pbar = tqdm(total=len(texts), desc="Batch Encoding")
+            results = []
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i:i + batch_size]
+                try:
+                    results.append(self.encode(batch))
+                except:
+                    import ipdb; ipdb.set_trace()
+                pbar.update(batch_size)
+            pbar.close()
+            results = np.concatenate(results)
 
         if isinstance(results, torch.Tensor):
             results = results.cpu()

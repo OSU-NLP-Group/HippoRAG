@@ -4,9 +4,12 @@ from hashlib import md5
 from typing import Dict, Any, List, Tuple, Literal, Union, Optional
 import numpy as np
 import re
+import logging
 
 from .typing import Triple
 from .llm_utils import filter_invalid_triples
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class NerRawOutput:

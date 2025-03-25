@@ -36,7 +36,14 @@ logger = logging.getLogger(__name__)
 
 class HippoRAG:
 
-    def __init__(self, global_config=None, save_dir=None, llm_model_name=None, embedding_model_name=None, llm_base_url=None):
+    def __init__(self,
+                 global_config=None,
+                 save_dir=None,
+                 llm_model_name=None,
+                 embedding_model_name=None,
+                 llm_base_url=None,
+                 azure_endpoint=None,
+                 azure_embedding_endpoint=None):
         """
         Initializes an instance of the class and its related components.
 
@@ -72,6 +79,7 @@ class HippoRAG:
             llm_model_name: LLM model name, can be inserted directly as well as through configuration file.
             embedding_model_name: Embedding model name, can be inserted directly as well as through configuration file.
             llm_base_url: LLM URL for a deployed vLLM model, can be inserted directly as well as through configuration file.
+
         """
         if global_config is None:
             self.global_config = BaseConfig()
@@ -90,6 +98,12 @@ class HippoRAG:
 
         if llm_base_url is not None:
             self.global_config.llm_base_url = llm_base_url
+
+        if azure_endpoint is not None:
+            self.global_config.azure_endpoint = azure_endpoint
+
+        if azure_embedding_endpoint is not None:
+            self.global_config.azure_embedding_endpoint = azure_embedding_endpoint
 
         _print_config = ",\n  ".join([f"{k} = {v}" for k, v in asdict(self.global_config).items()])
         logger.debug(f"HippoRAG init with config:\n  {_print_config}\n")
@@ -139,6 +153,8 @@ class HippoRAG:
         self.ppr_time = 0
         self.rerank_time = 0
         self.all_retrieval_time = 0
+
+        self.ent_node_to_chunk_ids = None
 
 
     def initialize_graph(self):
@@ -210,10 +226,10 @@ class HippoRAG:
             self.pre_openie(docs)
 
         self.chunk_embedding_store.insert_strings(docs)
-        chunks = self.chunk_embedding_store.get_text_for_all_rows()
+        chunk_to_rows = self.chunk_embedding_store.get_all_id_to_rows()
 
-        all_openie_info, chunk_keys_to_process = self.load_existing_openie(chunks.keys())
-        new_openie_rows = {k : chunks[k] for k in chunk_keys_to_process}
+        all_openie_info, chunk_keys_to_process = self.load_existing_openie(chunk_to_rows.keys())
+        new_openie_rows = {k : chunk_to_rows[k] for k in chunk_keys_to_process}
 
         if len(chunk_keys_to_process) > 0:
             new_ner_results_dict, new_triple_results_dict = self.openie.batch_openie(new_openie_rows)
@@ -224,10 +240,10 @@ class HippoRAG:
 
         ner_results_dict, triple_results_dict = reformat_openie_results(all_openie_info)
 
-        assert len(chunks) == len(ner_results_dict) == len(triple_results_dict)
+        assert len(chunk_to_rows) == len(ner_results_dict) == len(triple_results_dict)
 
         # prepare data_store
-        chunk_ids = list(chunks.keys())
+        chunk_ids = list(chunk_to_rows.keys())
 
         chunk_triples = [[text_processing(t) for t in triple_results_dict[chunk_id].triples] for chunk_id in chunk_ids]
         entity_nodes, chunk_triple_entities = extract_entity_nodes(chunk_triples)
@@ -242,7 +258,7 @@ class HippoRAG:
         logger.info(f"Constructing Graph")
 
         self.node_to_node_stats = {}
-        self.ent_node_to_num_chunk = {}
+        self.ent_node_to_chunk_ids = {}
 
         self.add_fact_edges(chunk_ids, chunk_triples)
         num_new_chunks = self.add_passage_edges(chunk_ids, chunk_triple_entities)
@@ -253,6 +269,84 @@ class HippoRAG:
 
             self.augment_graph()
             self.save_igraph()
+
+    def delete(self, docs_to_delete: List[str]):
+        """
+        Deletes the given documents from all data structures within the HippoRAG class.
+        Note that triples and entities which are indexed from chunks that are not being removed will not be removed.
+
+        Parameters:
+            docs : List[str]
+                A list of documents to be deleted.
+        """
+
+        #Making sure that all the necessary structures have been built.
+        if not self.ready_to_retrieve:
+            self.prepare_retrieval_objects()
+
+        #Get ids for chunks to delete
+        chunk_ids_to_delete = set(
+            [self.chunk_embedding_store.text_to_hash_id[chunk] for chunk in docs_to_delete])
+
+        #Find triples in chunks to delete
+        all_openie_info, chunk_keys_to_process = self.load_existing_openie([])
+        triples_to_delete = []
+
+        all_openie_info_with_deletes = []
+
+        for openie_doc in all_openie_info:
+            if openie_doc['idx'] in chunk_ids_to_delete:
+                triples_to_delete.append(openie_doc['extracted_triples'])
+            else:
+                all_openie_info_with_deletes.append(openie_doc)
+
+        triples_to_delete = flatten_facts(triples_to_delete)
+
+        #Filter out triples that appear in unaltered chunks
+        true_triples_to_delete = []
+
+        for triple in triples_to_delete:
+            doc_ids = self.triples_to_docs[str(triple)]
+
+            non_deleted_docs = doc_ids.difference(chunk_ids_to_delete)
+
+            if len(non_deleted_docs) == 0:
+                true_triples_to_delete.append(triple)
+
+        processed_true_triples_to_delete = [[text_processing(list(triple)) for triple in true_triples_to_delete]]
+        entities_to_delete, _ = extract_entity_nodes(processed_true_triples_to_delete)
+        processed_true_triples_to_delete = flatten_facts(processed_true_triples_to_delete)
+
+        triple_ids_to_delete = set([self.fact_embedding_store.text_to_hash_id[str(triple)] for triple in processed_true_triples_to_delete])
+
+        #Filter out entities that appear in unaltered chunks
+        ent_ids_to_delete = [self.entity_embedding_store.text_to_hash_id[ent] for ent in entities_to_delete]
+
+        filtered_ent_ids_to_delete = []
+
+        for ent_node in ent_ids_to_delete:
+            doc_ids = self.ent_node_to_chunk_ids[ent_node]
+
+            non_deleted_docs = doc_ids.difference(chunk_ids_to_delete)
+
+            if len(non_deleted_docs) == 0:
+                filtered_ent_ids_to_delete.append(ent_node)
+
+        logger.info(f"Deleting {len(chunk_ids_to_delete)} Chunks")
+        logger.info(f"Deleting {len(triple_ids_to_delete)} Triples")
+        logger.info(f"Deleting {len(filtered_ent_ids_to_delete)} Entities")
+
+        self.save_openie_results(all_openie_info_with_deletes)
+
+        self.entity_embedding_store.delete(filtered_ent_ids_to_delete)
+        self.fact_embedding_store.delete(triple_ids_to_delete)
+        self.chunk_embedding_store.delete(chunk_ids_to_delete)
+
+        #Delete Nodes from Graph
+        self.graph.delete_vertices(list(filtered_ent_ids_to_delete) + list(chunk_ids_to_delete))
+        self.save_igraph()
+
+        self.ready_to_retrieve = False
 
     def retrieve(self,
                  queries: List[str],
@@ -508,7 +602,6 @@ class HippoRAG:
             if chunk_key not in current_graph_nodes:
                 for triple in triples:
                     triple = tuple(triple)
-                    fact_key = compute_mdhash_id(content=str(triple), prefix=("fact-"))
 
                     node_key = compute_mdhash_id(content=triple[0], prefix=("entity-"))
                     node_2_key = compute_mdhash_id(content=triple[2], prefix=("entity-"))
@@ -522,7 +615,7 @@ class HippoRAG:
                     entities_in_chunk.add(node_2_key)
 
                 for node in entities_in_chunk:
-                    self.ent_node_to_num_chunk[node] = self.ent_node_to_num_chunk.get(node, 0) + 1
+                    self.ent_node_to_chunk_ids[node] = self.ent_node_to_chunk_ids.get(node, set()).union(set([chunk_key]))
 
     def add_passage_edges(self, chunk_ids: List[str], chunk_triple_entities: List[List[str]]):
         """
@@ -587,7 +680,7 @@ class HippoRAG:
         """
         logger.info(f"Expanding graph with synonymy edges")
 
-        self.entity_id_to_row = self.entity_embedding_store.get_text_for_all_rows()
+        self.entity_id_to_row = self.entity_embedding_store.get_all_id_to_rows()
         entity_node_keys = list(self.entity_id_to_row.keys())
 
         logger.info(f"Performing KNN retrieval for each phrase nodes ({len(entity_node_keys)}).")
@@ -763,14 +856,14 @@ class HippoRAG:
 
         existing_nodes = {v["name"]: v for v in self.graph.vs if "name" in v.attributes()}
 
-        entity_nodes = self.entity_embedding_store.get_text_for_all_rows()
-        passage_nodes = self.chunk_embedding_store.get_text_for_all_rows()
+        entity_to_row = self.entity_embedding_store.get_all_id_to_rows()
+        passage_to_row = self.chunk_embedding_store.get_all_id_to_rows()
 
-        nodes = entity_nodes
-        nodes.update(passage_nodes)
+        node_to_rows = entity_to_row
+        node_to_rows.update(passage_to_row)
 
         new_nodes = {}
-        for node_id, node in nodes.items():
+        for node_id, node in node_to_rows.items():
             node['name'] = node_id
             if node_id not in existing_nodes:
                 for k, v in node.items():
@@ -906,6 +999,28 @@ class HippoRAG:
         self.passage_embeddings = np.array(self.chunk_embedding_store.get_embeddings(self.passage_node_keys))
 
         self.fact_embeddings = np.array(self.fact_embedding_store.get_embeddings(self.fact_node_keys))
+
+        all_openie_info, chunk_keys_to_process = self.load_existing_openie([])
+
+        self.triples_to_docs = {}
+
+        for doc in all_openie_info:
+            triples = flatten_facts([doc['extracted_triples']])
+            for triple in triples:
+                if len(triple) == 3:
+                    self.triples_to_docs[str(triple)] = self.triples_to_docs.get(str(triple),set()).union(set([doc['idx']]))
+
+        if self.ent_node_to_chunk_ids is None:
+            ner_results_dict, triple_results_dict = reformat_openie_results(all_openie_info)
+
+            assert len(self.passage_node_keys) == len(ner_results_dict) == len(triple_results_dict)
+
+            # prepare data_store
+            chunk_triples = [[text_processing(t) for t in triple_results_dict[chunk_id].triples] for chunk_id in self.passage_node_keys]
+
+            self.node_to_node_stats = {}
+            self.ent_node_to_chunk_ids = {}
+            self.add_fact_edges(self.passage_node_keys, chunk_triples)
 
         self.ready_to_retrieve = True
 
@@ -1105,8 +1220,8 @@ class HippoRAG:
                 if phrase_id is not None:
                     phrase_weights[phrase_id] = fact_score
 
-                    if self.ent_node_to_num_chunk[phrase_key] != 0:
-                        phrase_weights[phrase_id] /= self.ent_node_to_num_chunk[phrase_key]
+                    if len(self.ent_node_to_chunk_ids.get(phrase_key, set())) > 0:
+                        phrase_weights[phrase_id] /= len(self.ent_node_to_chunk_ids[phrase_key])
 
                 if phrase not in phrase_scores:
                     phrase_scores[phrase] = []
