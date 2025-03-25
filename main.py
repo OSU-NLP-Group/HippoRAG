@@ -96,9 +96,12 @@ def main():
     samples = json.load(open(f"reproduce/dataset/{dataset_name}.json", "r"))
     all_queries = [s['question'] for s in samples]
 
-    gold_docs = get_gold_docs(samples, dataset_name)
     gold_answers = get_gold_answers(samples)
-    assert len(all_queries) == len(gold_docs) == len(gold_answers), "Length of queries, gold_docs, and gold_answers should be the same."
+    try:
+        gold_docs = get_gold_docs(samples, dataset_name)
+        assert len(all_queries) == len(gold_docs) == len(gold_answers), "Length of queries, gold_docs, and gold_answers should be the same."
+    except:
+        gold_docs = None
 
     config = BaseConfig(
         llm_base_url=llm_base_url,
