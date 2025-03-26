@@ -106,7 +106,8 @@ class CacheOpenAI(BaseLLM):
     def from_experiment_config(cls, global_config: BaseConfig) -> "CacheOpenAI":
         config_dict = global_config.__dict__
         cache_dir = os.path.join(global_config.save_dir, "llm_cache")
-        return cls(cache_dir=cache_dir, **config_dict)
+        api_key = getattr(global_config, "llm_api_key", None)
+        return cls(cache_dir=cache_dir, api_key=api_key, **config_dict)
 
     def __init__(self, cache_dir, cache_filename: str = None,
                  llm_name: str = "gpt-4o-mini", api_key: str = None, llm_base_url: str = None, 
