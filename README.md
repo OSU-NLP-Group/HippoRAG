@@ -123,6 +123,18 @@ rag_results = hipporag.rag_qa(queries=queries,
                               gold_docs=gold_docs,
                               gold_answers=answers)
 ```
+<details>
+  <summary>Example (OpenAI_Compatible_LLM_Embedding)</summary>
+    <p> If you want to use LLMs and Embeddings Compatible to OpenAI, please use the following methods.</p>
+    <pre><code>hipporag = HippoRAG(save_dir=save_dir, 
+    llm_model_name='Your LLM Model name',
+    llm_base_url='Your LLM Model url',
+    llm_api_key=os.getenv('Your LLM API_KEY'),
+    embedding_model_name='Your Embedding model name',  
+    embedding_base_url='Your Embedding model url',  
+    embedding_api_key=os.getenv('Your Embedding model API_KEY'))</code></pre>
+    
+</details>
 
 ### Local Deployment (vLLM)
 

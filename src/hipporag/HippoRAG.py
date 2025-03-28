@@ -35,7 +35,15 @@ logger = logging.getLogger(__name__)
 
 class HippoRAG:
 
-    def __init__(self, global_config=None, save_dir=None, llm_model_name=None, embedding_model_name=None, llm_base_url=None):
+    def __init__(self, global_config=None, 
+                 save_dir=None, 
+                 llm_model_name=None, 
+                 llm_base_url=None,
+                 llm_api_key=None,
+                 embedding_model_name=None,
+                 embedding_base_url=None,
+                 embedding_api_key=None,
+                 ):
         """
         Initializes an instance of the class and its related components.
 
@@ -70,7 +78,7 @@ class HippoRAG:
                 directory based on the class name and timestamp.
             llm_model_name: LLM model name, can be inserted directly as well as through configuration file.
             embedding_model_name: Embedding model name, can be inserted directly as well as through configuration file.
-            llm_base_url: LLM URL for a deployed vLLM model, can be inserted directly as well as through configuration file.
+            llm_base_url: LLM URL for a deployed LLM model, can be inserted directly as well as through configuration file.
         """
         if global_config is None:
             self.global_config = BaseConfig()
@@ -89,6 +97,15 @@ class HippoRAG:
 
         if llm_base_url is not None:
             self.global_config.llm_base_url = llm_base_url
+
+        if llm_api_key is not None:
+            self.global_config.llm_api_key = llm_api_key
+        
+        if embedding_api_key is not None:
+            self.global_config.embedding_api_key = embedding_api_key
+
+        if embedding_base_url is not None:
+            self.global_config.embedding_base_url = embedding_base_url
 
         _print_config = ",\n  ".join([f"{k} = {v}" for k, v in asdict(self.global_config).items()])
         logger.debug(f"HippoRAG init with config:\n  {_print_config}\n")
