@@ -159,9 +159,9 @@ class HippoRAG:
 
     def initialize_graph(self):
         """
-        Initializes a graph using a GraphML file if available or creates a new graph.
+        Initializes a graph using a Pickle file if available or creates a new graph.
 
-        The function attempts to load a pre-existing graph stored in a GraphML file. If the file
+        The function attempts to load a pre-existing graph stored in a Pickle file. If the file
         is not present or the graph needs to be created from scratch, it initializes a new directed
         or undirected graph based on the global configuration. If the graph is loaded successfully
         from the file, pertinent information about the graph (number of nodes and edges) is logged.
@@ -172,21 +172,21 @@ class HippoRAG:
         Raises:
             None
         """
-        self._graphml_xml_file = os.path.join(
-            self.working_dir, f"graph.graphml"
+        self._graph_pickle_filename = os.path.join(
+            self.working_dir, f"graph.pickle"
         )
 
         preloaded_graph = None
 
         if not self.global_config.force_index_from_scratch:
-            if os.path.exists(self._graphml_xml_file):
-                preloaded_graph = ig.Graph.Read_GraphML(self._graphml_xml_file)
+            if os.path.exists(self._graph_pickle_filename):
+                preloaded_graph = ig.Graph.Read_Pickle(self._graph_pickle_filename)
 
         if preloaded_graph is None:
             return ig.Graph(directed=self.global_config.is_directed_graph)
         else:
             logger.info(
-                f"Loaded graph from {self._graphml_xml_file} with {preloaded_graph.vcount()} nodes, {preloaded_graph.ecount()} edges"
+                f"Loaded graph from {self._graph_pickle_filename} with {preloaded_graph.vcount()} nodes, {preloaded_graph.ecount()} edges"
             )
             return preloaded_graph
 
@@ -914,7 +914,7 @@ class HippoRAG:
         logger.info(
             f"Writing graph with {len(self.graph.vs())} nodes, {len(self.graph.es())} edges"
         )
-        self.graph.write_graphml(self._graphml_xml_file)
+        self.graph.write_pickle(self._graph_pickle_filename)
         logger.info(f"Saving graph completed!")
 
     def get_graph_info(self) -> Dict:
