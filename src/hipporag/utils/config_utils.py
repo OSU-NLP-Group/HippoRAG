@@ -134,7 +134,7 @@ class BaseConfig:
         metadata={"help": "Max sequence length for the embedding model."}
     )
     embedding_model_dtype: Literal["float16", "float32", "bfloat16", "auto"] = field(
-        default=None,
+        default="auto",
         metadata={"help": "Data type for local embedding model."}
     )
     
