@@ -49,7 +49,7 @@ class GritLMEmbeddingModel(BaseEmbeddingModel):
             "norm": self.global_config.embedding_return_as_normalized,
             "model_init_params": {
                 "model_name_or_path": self.embedding_model_name,
-                "torch_dtype": "auto",
+                "torch_dtype": self.global_config.embedding_model_dtype,
                 "device_map": "auto", # added this line to use multiple GPUs
                 # **kwargs
             },

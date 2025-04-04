@@ -46,8 +46,8 @@ class NVEmbedV2EmbeddingModel(BaseEmbeddingModel):
                 # "model_name_or_path": self.embedding_model_name2mode_name_or_path[self.embedding_model_name],
                 "pretrained_model_name_or_path": self.embedding_model_name,
                 "trust_remote_code": True,
-                # "torch_dtype": "auto",
                 'device_map': "auto",  # added this line to use multiple GPUs
+                "torch_dtype": self.global_config.embedding_model_dtype,
                 # **kwargs
             },
             "encode_params": {
