@@ -119,10 +119,15 @@ class CacheOpenAI(BaseLLM):
         cache_dir = os.path.join(global_config.save_dir, "llm_cache")
         return cls(cache_dir=cache_dir, global_config=global_config)
 
-    def __init__(self, cache_dir, global_config, cache_filename: str = None,
-                 llm_name: str = "gpt-4o-mini", api_key: str = None, llm_base_url: str = None,
+    def __init__(self, cache_dir, global_config: BaseConfig, cache_filename: str = None,
+                 llm_name: str = None, api_key: str = None, llm_base_url: str = None,
                  high_throughput: bool = False,
                  **kwargs) -> None:
+        if llm_name is None:
+            llm_name = global_config.llm_name
+        if llm_base_url is None:
+            llm_base_url = global_config.llm_base_url
+
         super().__init__()
         self.cache_dir = cache_dir
         self.global_config = global_config
@@ -148,7 +153,7 @@ class CacheOpenAI(BaseLLM):
             self.openai_client = AzureOpenAI(api_version=self.global_config.azure_endpoint.split('api-version=')[1],
                                              azure_endpoint=self.global_config.azure_endpoint, max_retries=self.max_retries)
 
-    def _init_llm_config(self, global_config) -> None:
+    def _init_llm_config(self, global_config: BaseConfig) -> None:
         config_dict = global_config.__dict__
 
         config_dict['llm_name'] = self.llm_name
