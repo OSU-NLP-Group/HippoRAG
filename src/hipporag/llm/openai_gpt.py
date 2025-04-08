@@ -122,6 +122,11 @@ class CacheOpenAI(BaseLLM):
     def __init__(self, cache_dir, global_config, cache_filename: str = None,
                  high_throughput: bool = True,
                  **kwargs) -> None:
+        if llm_name is None:
+            llm_name = global_config.llm_name
+        if llm_base_url is None:
+            llm_base_url = global_config.llm_base_url
+
         super().__init__()
         self.cache_dir = cache_dir
         self.global_config = global_config
