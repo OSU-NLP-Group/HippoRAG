@@ -77,11 +77,17 @@ def main():
     parser.add_argument('--force_openie_from_scratch', type=str, default='false', help='If set to False, will try to first reuse openie results for the corpus if they exist.')
     parser.add_argument('--openie_mode', choices=['online', 'offline'], default='online',
                         help="OpenIE mode, offline denotes using VLLM offline batch mode for indexing, while online denotes")
+    parser.add_argument('--save_dir', type=str, default='outputs', help='Save directory')
     args = parser.parse_args()
 
     dataset_name = args.dataset
+    save_dir = args.save_dir
     llm_base_url = args.llm_base_url
     llm_name = args.llm_name
+    if save_dir == 'outputs':
+        save_dir = save_dir + '/' + dataset_name
+    else:
+        save_dir = save_dir + '_' + dataset_name
 
     corpus_path = f"reproduce/dataset/{dataset_name}_corpus.json"
     with open(corpus_path, "r") as f:
@@ -96,11 +102,15 @@ def main():
     samples = json.load(open(f"reproduce/dataset/{dataset_name}.json", "r"))
     all_queries = [s['question'] for s in samples]
 
-    gold_docs = get_gold_docs(samples, dataset_name)
     gold_answers = get_gold_answers(samples)
-    assert len(all_queries) == len(gold_docs) == len(gold_answers), "Length of queries, gold_docs, and gold_answers should be the same."
+    try:
+        gold_docs = get_gold_docs(samples, dataset_name)
+        assert len(all_queries) == len(gold_docs) == len(gold_answers), "Length of queries, gold_docs, and gold_answers should be the same."
+    except:
+        gold_docs = None
 
     config = BaseConfig(
+        save_dir=save_dir,
         llm_base_url=llm_base_url,
         llm_name=llm_name,
         dataset=dataset_name,

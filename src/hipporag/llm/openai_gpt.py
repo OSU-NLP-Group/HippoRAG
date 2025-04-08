@@ -10,7 +10,9 @@ import httpx
 import openai
 from filelock import FileLock
 from openai import OpenAI
+from openai import AzureOpenAI
 from packaging import version
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from ..utils.config_utils import BaseConfig
 from ..utils.llm_utils import (
@@ -99,52 +101,73 @@ def cache_response(func):
 
     return wrapper
 
+def dynamic_retry_decorator(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        max_retries = getattr(self, "max_retries", 5)  
+        dynamic_retry = retry(stop=stop_after_attempt(max_retries), wait=wait_fixed(1))
+        decorated_func = dynamic_retry(func)
+        return decorated_func(self, *args, **kwargs)
+    return wrapper
 
 class CacheOpenAI(BaseLLM):
     """OpenAI LLM implementation."""
     @classmethod
     def from_experiment_config(cls, global_config: BaseConfig) -> "CacheOpenAI":
         config_dict = global_config.__dict__
+        config_dict['max_retries'] = global_config.max_retry_attempts
         cache_dir = os.path.join(global_config.save_dir, "llm_cache")
-        api_key = getattr(global_config, "llm_api_key", None)
-        return cls(cache_dir=cache_dir, api_key=api_key, **config_dict)
+        return cls(cache_dir=cache_dir, global_config=global_config)
 
-    def __init__(self, cache_dir, cache_filename: str = None,
-                 llm_name: str = "gpt-4o-mini", api_key: str = None, llm_base_url: str = None, 
+    def __init__(self, cache_dir, global_config, cache_filename: str = None,
                  high_throughput: bool = True,
                  **kwargs) -> None:
+
         super().__init__()
         self.cache_dir = cache_dir
+        self.global_config = global_config
+
+        self.llm_name = global_config.llm_name
+        self.llm_base_url = global_config.llm_base_url
+
         os.makedirs(self.cache_dir, exist_ok=True)
         if cache_filename is None:
-            cache_filename = f"{llm_name.replace('/', '_')}_cache.sqlite"
+            cache_filename = f"{self.llm_name.replace('/', '_')}_cache.sqlite"
         self.cache_file_name = os.path.join(self.cache_dir, cache_filename)
-        self.llm_name = llm_name
-        self.llm_base_url = llm_base_url
-        self._init_llm_config(**kwargs)
+
+        self._init_llm_config()
         if high_throughput:
             limits = httpx.Limits(max_connections=500, max_keepalive_connections=100)
             client = httpx.Client(limits=limits, timeout=httpx.Timeout(5*60, read=5*60))
         else:
             client = None
-        self.openai_client = OpenAI(base_url=self.llm_base_url, api_key=api_key, http_client=client)
 
-    def _init_llm_config(self, **kwargs) -> None:
-        config_dict = {
-            "llm_name": self.llm_name,
-            "llm_base_url": self.llm_base_url,
-            "generate_params": {
-                "model": self.llm_name,
-                "max_completion_tokens": kwargs.get("max_new_tokens", 400),
-                "n": kwargs.get("num_gen_choices", 1),
-                "seed": kwargs.get("seed", 0),
-                "temperature": kwargs.get("temperature", 0.0),
+        self.max_retries = kwargs.get("max_retries", 2)
+
+        if self.global_config.azure_endpoint is None:
+            self.openai_client = OpenAI(base_url=self.llm_base_url, http_client=client, max_retries=self.max_retries)
+        else:
+            self.openai_client = AzureOpenAI(api_version=self.global_config.azure_endpoint.split('api-version=')[1],
+                                             azure_endpoint=self.global_config.azure_endpoint, max_retries=self.max_retries)
+
+    def _init_llm_config(self) -> None:
+        config_dict = self.global_config.__dict__
+
+        config_dict['llm_name'] = self.global_config.llm_name
+        config_dict['llm_base_url'] = self.global_config.llm_base_url
+        config_dict['generate_params'] = {
+                "model": self.global_config.llm_name,
+                "max_completion_tokens": config_dict.get("max_new_tokens", 400),
+                "n": config_dict.get("num_gen_choices", 1),
+                "seed": config_dict.get("seed", 0),
+                "temperature": config_dict.get("temperature", 0.0),
             }
-        }
+
         self.llm_config = LLMConfig.from_dict(config_dict=config_dict)
         logger.debug(f"Init {self.__class__.__name__}'s llm_config: {self.llm_config}")
 
     @cache_response
+    @dynamic_retry_decorator
     def infer(
         self,
         messages: List[TextChatMessage],
@@ -163,7 +186,8 @@ class CacheOpenAI(BaseLLM):
         response = self.openai_client.chat.completions.create(**params)
 
         response_message = response.choices[0].message.content
-
+        assert isinstance(response_message, str), "response_message should be a string"
+        
         metadata = {
             "prompt_tokens": response.usage.prompt_tokens, 
             "completion_tokens": response.usage.completion_tokens,

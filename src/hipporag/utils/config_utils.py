@@ -23,6 +23,18 @@ class BaseConfig:
         default=None,
         metadata={"help": "Base URL for the LLM model, if none, means using OPENAI service."}
     )
+    embedding_base_url: str = field(
+        default=None,
+        metadata={"help": "Base URL for an OpenAI compatible embedding model, if none, means using OPENAI service."}
+    )
+    azure_endpoint: str = field(
+        default=None,
+        metadata={"help": "Azure Endpoint URI for the LLM model, if none, uses OPENAI service directly."}
+    )
+    azure_embedding_endpoint: str = field(
+        default=None,
+        metadata={"help": "Azure Endpoint URI for the OpenAI embedding model, if none, uses OPENAI service directly."}
+    )
     max_new_tokens: Union[None, int] = field(
         default=2048,
         metadata={"help": "Max new tokens to generate in each inference."}
@@ -124,6 +136,10 @@ class BaseConfig:
     embedding_max_seq_len: int = field(
         default=2048,
         metadata={"help": "Max sequence length for the embedding model."}
+    )
+    embedding_model_dtype: Literal["float16", "float32", "bfloat16", "auto"] = field(
+        default="auto",
+        metadata={"help": "Data type for local embedding model."}
     )
     
     

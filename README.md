@@ -123,18 +123,18 @@ rag_results = hipporag.rag_qa(queries=queries,
                               gold_docs=gold_docs,
                               gold_answers=answers)
 ```
-<details>
-  <summary>Example (OpenAI_Compatible_LLM_Embedding)</summary>
-    <p> If you want to use LLMs and Embeddings Compatible to OpenAI, please use the following methods.</p>
-    <pre><code>hipporag = HippoRAG(save_dir=save_dir, 
+
+#### Example (OpenAI Compatible Embeddings)
+
+If you want to use LLMs and Embeddings Compatible to OpenAI, please use the following methods.</p>
+    
+```python
+hipporag = HippoRAG(save_dir=save_dir, 
     llm_model_name='Your LLM Model name',
     llm_base_url='Your LLM Model url',
-    llm_api_key=os.getenv('Your LLM API_KEY'),
     embedding_model_name='Your Embedding model name',  
-    embedding_base_url='Your Embedding model url',  
-    embedding_api_key=os.getenv('Your Embedding model API_KEY'))</code></pre>
-    
-</details>
+    embedding_base_url='Your Embedding model url')
+```
 
 ### Local Deployment (vLLM)
 
@@ -169,7 +169,47 @@ hipporag = HippoRAG(save_dir=save_dir,
 # Same Indexing, Retrieval and QA as running OpenAI models above
 ```
 
-## Running Experiments
+## Testing
+
+When making a contribution to HippoRAG, please run the scripts below to ensure that your changes do not result in unexpected behavior from our core modules. 
+
+These scripts test for indexing, graph loading, document deletion and incremental updates to a HippoRAG object.
+
+### OpenAI Test
+
+To test HippoRAG with an OpenAI LLM and embedding model, simply run the following. 
+The cost of this test will be negligible.
+
+```sh
+export OPENAI_API_KEY=<your openai api key> 
+
+conda activate hipporag
+
+python tests_openai.py
+```
+
+### Local Test
+
+To test locally, you must deploy a vLLM instance. We choose to deploy a smaller 8B model `Llama-3.1-8B-Instruct` for cheaper testing.
+
+```sh
+export CUDA_VISIBLE_DEVICES=0
+export VLLM_WORKER_MULTIPROC_METHOD=spawn
+export HF_HOME=<path to Huggingface home directory>
+
+conda activate hipporag  # vllm should be in this environment
+
+# Tune gpu-memory-utilization or max_model_len to fit your GPU memory, if OOM occurs
+vllm serve meta-llama/Llama-3.1-8B-Instruct --tensor-parallel-size 2 --max_model_len 4096 --gpu-memory-utilization 0.95 --port 6578
+```
+
+Then, we run the following test script:
+
+```sh
+CUDA_VISIBLE=1 python tests_local.py
+```
+
+## Reproducing our Experiments
 
 To use our code to run experiments we recommend you clone this repository and follow the structure of the `main.py` script.
 
@@ -402,8 +442,8 @@ If you find this work useful, please consider citing our papers:
 
 ## TODO:
 
-- [ ] Add support for more embedding models
+- [x] Add support for more embedding models
+- [x] Add support for embedding endpoints
 - [ ] Add support for vector database integration
-- [ ] Add support for embedding endpoints
 
 Please feel free to open an issue or PR if you have any questions or suggestions.

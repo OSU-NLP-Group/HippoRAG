@@ -15,6 +15,7 @@ import igraph as ig
 import numpy as np
 from collections import defaultdict
 import re
+import time
 
 from .llm import _get_llm_class, BaseLLM
 from .embedding_model import _get_embedding_model_class, BaseEmbeddingModel
@@ -35,15 +36,15 @@ logger = logging.getLogger(__name__)
 
 class HippoRAG:
 
-    def __init__(self, global_config=None, 
-                 save_dir=None, 
-                 llm_model_name=None, 
+    def __init__(self,
+                 global_config=None,
+                 save_dir=None,
+                 llm_model_name=None,
                  llm_base_url=None,
-                 llm_api_key=None,
                  embedding_model_name=None,
                  embedding_base_url=None,
-                 embedding_api_key=None,
-                 ):
+                 azure_endpoint=None,
+                 azure_embedding_endpoint=None):
         """
         Initializes an instance of the class and its related components.
 
@@ -98,14 +99,14 @@ class HippoRAG:
         if llm_base_url is not None:
             self.global_config.llm_base_url = llm_base_url
 
-        if llm_api_key is not None:
-            self.global_config.llm_api_key = llm_api_key
-        
-        if embedding_api_key is not None:
-            self.global_config.embedding_api_key = embedding_api_key
-
         if embedding_base_url is not None:
             self.global_config.embedding_base_url = embedding_base_url
+
+        if azure_endpoint is not None:
+            self.global_config.azure_endpoint = azure_endpoint
+
+        if azure_embedding_endpoint is not None:
+            self.global_config.azure_embedding_endpoint = azure_embedding_endpoint
 
         _print_config = ",\n  ".join([f"{k} = {v}" for k, v in asdict(self.global_config).items()])
         logger.debug(f"HippoRAG init with config:\n  {_print_config}\n")
@@ -152,12 +153,18 @@ class HippoRAG:
 
         self.ready_to_retrieve = False
 
+        self.ppr_time = 0
+        self.rerank_time = 0
+        self.all_retrieval_time = 0
+
+        self.ent_node_to_chunk_ids = None
+
 
     def initialize_graph(self):
         """
-        Initializes a graph using a GraphML file if available or creates a new graph.
+        Initializes a graph using a Pickle file if available or creates a new graph.
 
-        The function attempts to load a pre-existing graph stored in a GraphML file. If the file
+        The function attempts to load a pre-existing graph stored in a Pickle file. If the file
         is not present or the graph needs to be created from scratch, it initializes a new directed
         or undirected graph based on the global configuration. If the graph is loaded successfully
         from the file, pertinent information about the graph (number of nodes and edges) is logged.
@@ -168,21 +175,21 @@ class HippoRAG:
         Raises:
             None
         """
-        self._graphml_xml_file = os.path.join(
-            self.working_dir, f"graph.graphml"
+        self._graph_pickle_filename = os.path.join(
+            self.working_dir, f"graph.pickle"
         )
 
         preloaded_graph = None
 
         if not self.global_config.force_index_from_scratch:
-            if os.path.exists(self._graphml_xml_file):
-                preloaded_graph = ig.Graph.Read_GraphML(self._graphml_xml_file)
+            if os.path.exists(self._graph_pickle_filename):
+                preloaded_graph = ig.Graph.Read_Pickle(self._graph_pickle_filename)
 
         if preloaded_graph is None:
             return ig.Graph(directed=self.global_config.is_directed_graph)
         else:
             logger.info(
-                f"Loaded graph from {self._graphml_xml_file} with {preloaded_graph.vcount()} nodes, {preloaded_graph.ecount()} edges"
+                f"Loaded graph from {self._graph_pickle_filename} with {preloaded_graph.vcount()} nodes, {preloaded_graph.ecount()} edges"
             )
             return preloaded_graph
 
@@ -222,10 +229,10 @@ class HippoRAG:
             self.pre_openie(docs)
 
         self.chunk_embedding_store.insert_strings(docs)
-        chunks = self.chunk_embedding_store.get_text_for_all_rows()
+        chunk_to_rows = self.chunk_embedding_store.get_all_id_to_rows()
 
-        all_openie_info, chunk_keys_to_process = self.load_existing_openie(chunks.keys())
-        new_openie_rows = {k : chunks[k] for k in chunk_keys_to_process}
+        all_openie_info, chunk_keys_to_process = self.load_existing_openie(chunk_to_rows.keys())
+        new_openie_rows = {k : chunk_to_rows[k] for k in chunk_keys_to_process}
 
         if len(chunk_keys_to_process) > 0:
             new_ner_results_dict, new_triple_results_dict = self.openie.batch_openie(new_openie_rows)
@@ -236,10 +243,10 @@ class HippoRAG:
 
         ner_results_dict, triple_results_dict = reformat_openie_results(all_openie_info)
 
-        assert len(chunks) == len(ner_results_dict) == len(triple_results_dict)
+        assert len(chunk_to_rows) == len(ner_results_dict) == len(triple_results_dict)
 
         # prepare data_store
-        chunk_ids = list(chunks.keys())
+        chunk_ids = list(chunk_to_rows.keys())
 
         chunk_triples = [[text_processing(t) for t in triple_results_dict[chunk_id].triples] for chunk_id in chunk_ids]
         entity_nodes, chunk_triple_entities = extract_entity_nodes(chunk_triples)
@@ -254,7 +261,7 @@ class HippoRAG:
         logger.info(f"Constructing Graph")
 
         self.node_to_node_stats = {}
-        self.ent_node_to_num_chunk = {}
+        self.ent_node_to_chunk_ids = {}
 
         self.add_fact_edges(chunk_ids, chunk_triples)
         num_new_chunks = self.add_passage_edges(chunk_ids, chunk_triple_entities)
@@ -265,6 +272,89 @@ class HippoRAG:
 
             self.augment_graph()
             self.save_igraph()
+
+    def delete(self, docs_to_delete: List[str]):
+        """
+        Deletes the given documents from all data structures within the HippoRAG class.
+        Note that triples and entities which are indexed from chunks that are not being removed will not be removed.
+
+        Parameters:
+            docs : List[str]
+                A list of documents to be deleted.
+        """
+
+        #Making sure that all the necessary structures have been built.
+        if not self.ready_to_retrieve:
+            self.prepare_retrieval_objects()
+
+        current_docs = set(self.chunk_embedding_store.get_all_texts())
+        docs_to_delete = [doc for doc in docs_to_delete if doc in current_docs]
+
+        #Get ids for chunks to delete
+        chunk_ids_to_delete = set(
+            [self.chunk_embedding_store.text_to_hash_id[chunk] for chunk in docs_to_delete])
+
+        #Find triples in chunks to delete
+        all_openie_info, chunk_keys_to_process = self.load_existing_openie([])
+        triples_to_delete = []
+
+        all_openie_info_with_deletes = []
+
+        for openie_doc in all_openie_info:
+            if openie_doc['idx'] in chunk_ids_to_delete:
+                triples_to_delete.append(openie_doc['extracted_triples'])
+            else:
+                all_openie_info_with_deletes.append(openie_doc)
+
+        triples_to_delete = flatten_facts(triples_to_delete)
+
+        #Filter out triples that appear in unaltered chunks
+        true_triples_to_delete = []
+
+        for triple in triples_to_delete:
+            proc_triple = tuple(text_processing(list(triple)))
+
+            doc_ids = self.proc_triples_to_docs[str(proc_triple)]
+
+            non_deleted_docs = doc_ids.difference(chunk_ids_to_delete)
+
+            if len(non_deleted_docs) == 0:
+                true_triples_to_delete.append(triple)
+
+        processed_true_triples_to_delete = [[text_processing(list(triple)) for triple in true_triples_to_delete]]
+        entities_to_delete, _ = extract_entity_nodes(processed_true_triples_to_delete)
+        processed_true_triples_to_delete = flatten_facts(processed_true_triples_to_delete)
+
+        triple_ids_to_delete = set([self.fact_embedding_store.text_to_hash_id[str(triple)] for triple in processed_true_triples_to_delete])
+
+        #Filter out entities that appear in unaltered chunks
+        ent_ids_to_delete = [self.entity_embedding_store.text_to_hash_id[ent] for ent in entities_to_delete]
+
+        filtered_ent_ids_to_delete = []
+
+        for ent_node in ent_ids_to_delete:
+            doc_ids = self.ent_node_to_chunk_ids[ent_node]
+
+            non_deleted_docs = doc_ids.difference(chunk_ids_to_delete)
+
+            if len(non_deleted_docs) == 0:
+                filtered_ent_ids_to_delete.append(ent_node)
+
+        logger.info(f"Deleting {len(chunk_ids_to_delete)} Chunks")
+        logger.info(f"Deleting {len(triple_ids_to_delete)} Triples")
+        logger.info(f"Deleting {len(filtered_ent_ids_to_delete)} Entities")
+
+        self.save_openie_results(all_openie_info_with_deletes)
+
+        self.entity_embedding_store.delete(filtered_ent_ids_to_delete)
+        self.fact_embedding_store.delete(triple_ids_to_delete)
+        self.chunk_embedding_store.delete(chunk_ids_to_delete)
+
+        #Delete Nodes from Graph
+        self.graph.delete_vertices(list(filtered_ent_ids_to_delete) + list(chunk_ids_to_delete))
+        self.save_igraph()
+
+        self.ready_to_retrieve = False
 
     def retrieve(self,
                  queries: List[str],
@@ -297,6 +387,7 @@ class HippoRAG:
         -----
         - Long queries with no relevant facts after reranking will default to results from dense passage retrieval.
         """
+        retrieve_start_time = time.time()  # Record start time
 
         if num_to_retrieve is None:
             num_to_retrieve = self.global_config.retrieval_top_k
@@ -310,9 +401,14 @@ class HippoRAG:
         self.get_query_embeddings(queries)
 
         retrieval_results = []
+
         for q_idx, query in tqdm(enumerate(queries), desc="Retrieving", total=len(queries)):
+            rerank_start = time.time()
             query_fact_scores = self.get_fact_scores(query)
             top_k_fact_indices, top_k_facts, rerank_log = self.rerank_facts(query, query_fact_scores)
+            rerank_end = time.time()
+
+            self.rerank_time += rerank_end - rerank_start
 
             if len(top_k_facts) == 0:
                 logger.info('No facts found after reranking, return DPR results')
@@ -328,6 +424,15 @@ class HippoRAG:
             top_k_docs = [self.chunk_embedding_store.get_row(self.passage_node_keys[idx])["content"] for idx in sorted_doc_ids[:num_to_retrieve]]
 
             retrieval_results.append(QuerySolution(question=query, docs=top_k_docs, doc_scores=sorted_doc_scores[:num_to_retrieve]))
+
+        retrieve_end_time = time.time()  # Record end time
+
+        self.all_retrieval_time += retrieve_end_time - retrieve_start_time
+
+        logger.info(f"Total Retrieval Time {self.all_retrieval_time:.2f}s")
+        logger.info(f"Total Recognition Memory Time {self.rerank_time:.2f}s")
+        logger.info(f"Total PPR Time {self.ppr_time:.2f}s")
+        logger.info(f"Total Misc Time {self.all_retrieval_time - (self.rerank_time + self.ppr_time):.2f}s")
 
         # Evaluate retrieval
         if gold_docs is not None:
@@ -384,6 +489,151 @@ class HippoRAG:
                 queries, overall_retrieval_result = self.retrieve(queries=queries, gold_docs=gold_docs)
             else:
                 queries = self.retrieve(queries=queries)
+
+        # Performing QA
+        queries_solutions, all_response_message, all_metadata = self.qa(queries)
+
+        # Evaluating QA
+        if gold_answers is not None:
+            overall_qa_em_result, example_qa_em_results = qa_em_evaluator.calculate_metric_scores(
+                gold_answers=gold_answers, predicted_answers=[qa_result.answer for qa_result in queries_solutions],
+                aggregation_fn=np.max)
+            overall_qa_f1_result, example_qa_f1_results = qa_f1_evaluator.calculate_metric_scores(
+                gold_answers=gold_answers, predicted_answers=[qa_result.answer for qa_result in queries_solutions],
+                aggregation_fn=np.max)
+
+            # round off to 4 decimal places for QA results
+            overall_qa_em_result.update(overall_qa_f1_result)
+            overall_qa_results = overall_qa_em_result
+            overall_qa_results = {k: round(float(v), 4) for k, v in overall_qa_results.items()}
+            logger.info(f"Evaluation results for QA: {overall_qa_results}")
+
+            # Save retrieval and QA results
+            for idx, q in enumerate(queries_solutions):
+                q.gold_answers = list(gold_answers[idx])
+                if gold_docs is not None:
+                    q.gold_docs = gold_docs[idx]
+
+            return queries_solutions, all_response_message, all_metadata, overall_retrieval_result, overall_qa_results
+        else:
+            return queries_solutions, all_response_message, all_metadata
+
+    def retrieve_dpr(self,
+                     queries: List[str],
+                     num_to_retrieve: int = None,
+                     gold_docs: List[List[str]] = None) -> List[QuerySolution] | Tuple[List[QuerySolution], Dict]:
+        """
+        Performs retrieval using a DPR framework, which consists of several steps:
+        - Dense passage scoring
+
+        Parameters:
+            queries: List[str]
+                A list of query strings for which documents are to be retrieved.
+            num_to_retrieve: int, optional
+                The maximum number of documents to retrieve for each query. If not specified, defaults to
+                the `retrieval_top_k` value defined in the global configuration.
+            gold_docs: List[List[str]], optional
+                A list of lists containing gold-standard documents corresponding to each query. Required
+                if retrieval performance evaluation is enabled (`do_eval_retrieval` in global configuration).
+
+        Returns:
+            List[QuerySolution] or (List[QuerySolution], Dict)
+                If retrieval performance evaluation is not enabled, returns a list of QuerySolution objects, each containing
+                the retrieved documents and their scores for the corresponding query. If evaluation is enabled, also returns
+                a dictionary containing the evaluation metrics computed over the retrieved results.
+
+        Notes
+        -----
+        - Long queries with no relevant facts after reranking will default to results from dense passage retrieval.
+        """
+        retrieve_start_time = time.time()  # Record start time
+
+        if num_to_retrieve is None:
+            num_to_retrieve = self.global_config.retrieval_top_k
+
+        if gold_docs is not None:
+            retrieval_recall_evaluator = RetrievalRecall(global_config=self.global_config)
+
+        if not self.ready_to_retrieve:
+            self.prepare_retrieval_objects()
+
+        self.get_query_embeddings(queries)
+
+        retrieval_results = []
+
+        for q_idx, query in tqdm(enumerate(queries), desc="Retrieving", total=len(queries)):
+            logger.info('No facts found after reranking, return DPR results')
+            sorted_doc_ids, sorted_doc_scores = self.dense_passage_retrieval(query)
+
+            top_k_docs = [self.chunk_embedding_store.get_row(self.passage_node_keys[idx])["content"] for idx in
+                          sorted_doc_ids[:num_to_retrieve]]
+
+            retrieval_results.append(
+                QuerySolution(question=query, docs=top_k_docs, doc_scores=sorted_doc_scores[:num_to_retrieve]))
+
+        retrieve_end_time = time.time()  # Record end time
+
+        self.all_retrieval_time += retrieve_end_time - retrieve_start_time
+
+        logger.info(f"Total Retrieval Time {self.all_retrieval_time:.2f}s")
+
+        # Evaluate retrieval
+        if gold_docs is not None:
+            k_list = [1, 2, 5, 10, 20, 30, 50, 100, 150, 200]
+            overall_retrieval_result, example_retrieval_results = retrieval_recall_evaluator.calculate_metric_scores(
+                gold_docs=gold_docs, retrieved_docs=[retrieval_result.docs for retrieval_result in retrieval_results],
+                k_list=k_list)
+            logger.info(f"Evaluation results for retrieval: {overall_retrieval_result}")
+
+            return retrieval_results, overall_retrieval_result
+        else:
+            return retrieval_results
+
+    def rag_qa_dpr(self,
+               queries: List[str|QuerySolution],
+               gold_docs: List[List[str]] = None,
+               gold_answers: List[List[str]] = None) -> Tuple[List[QuerySolution], List[str], List[Dict]] | Tuple[List[QuerySolution], List[str], List[Dict], Dict, Dict]:
+        """
+        Performs retrieval-augmented generation enhanced QA using a standard DPR framework.
+
+        This method can handle both string-based queries and pre-processed QuerySolution objects. Depending
+        on its inputs, it returns answers only or additionally evaluate retrieval and answer quality using
+        recall @ k, exact match and F1 score metrics.
+
+        Parameters:
+            queries (List[Union[str, QuerySolution]]): A list of queries, which can be either strings or
+                QuerySolution instances. If they are strings, retrieval will be performed.
+            gold_docs (Optional[List[List[str]]]): A list of lists containing gold-standard documents for
+                each query. This is used if document-level evaluation is to be performed. Default is None.
+            gold_answers (Optional[List[List[str]]]): A list of lists containing gold-standard answers for
+                each query. Required if evaluation of question answering (QA) answers is enabled. Default
+                is None.
+
+        Returns:
+            Union[
+                Tuple[List[QuerySolution], List[str], List[Dict]],
+                Tuple[List[QuerySolution], List[str], List[Dict], Dict, Dict]
+            ]: A tuple that always includes:
+                - List of QuerySolution objects containing answers and metadata for each query.
+                - List of response messages for the provided queries.
+                - List of metadata dictionaries for each query.
+                If evaluation is enabled, the tuple also includes:
+                - A dictionary with overall results from the retrieval phase (if applicable).
+                - A dictionary with overall QA evaluation metrics (exact match and F1 scores).
+
+        """
+        if gold_answers is not None:
+            qa_em_evaluator = QAExactMatch(global_config=self.global_config)
+            qa_f1_evaluator = QAF1Score(global_config=self.global_config)
+
+        # Retrieving (if necessary)
+        overall_retrieval_result = None
+
+        if not isinstance(queries[0], QuerySolution):
+            if gold_docs is not None:
+                queries, overall_retrieval_result = self.retrieve_dpr(queries=queries, gold_docs=gold_docs)
+            else:
+                queries = self.retrieve_dpr(queries=queries)
 
         # Performing QA
         queries_solutions, all_response_message, all_metadata = self.qa(queries)
@@ -505,7 +755,6 @@ class HippoRAG:
             if chunk_key not in current_graph_nodes:
                 for triple in triples:
                     triple = tuple(triple)
-                    fact_key = compute_mdhash_id(content=str(triple), prefix=("fact-"))
 
                     node_key = compute_mdhash_id(content=triple[0], prefix=("entity-"))
                     node_2_key = compute_mdhash_id(content=triple[2], prefix=("entity-"))
@@ -519,7 +768,7 @@ class HippoRAG:
                     entities_in_chunk.add(node_2_key)
 
                 for node in entities_in_chunk:
-                    self.ent_node_to_num_chunk[node] = self.ent_node_to_num_chunk.get(node, 0) + 1
+                    self.ent_node_to_chunk_ids[node] = self.ent_node_to_chunk_ids.get(node, set()).union(set([chunk_key]))
 
     def add_passage_edges(self, chunk_ids: List[str], chunk_triple_entities: List[List[str]]):
         """
@@ -584,7 +833,7 @@ class HippoRAG:
         """
         logger.info(f"Expanding graph with synonymy edges")
 
-        self.entity_id_to_row = self.entity_embedding_store.get_text_for_all_rows()
+        self.entity_id_to_row = self.entity_embedding_store.get_all_id_to_rows()
         entity_node_keys = list(self.entity_id_to_row.keys())
 
         logger.info(f"Performing KNN retrieval for each phrase nodes ({len(entity_node_keys)}).")
@@ -760,14 +1009,14 @@ class HippoRAG:
 
         existing_nodes = {v["name"]: v for v in self.graph.vs if "name" in v.attributes()}
 
-        entity_nodes = self.entity_embedding_store.get_text_for_all_rows()
-        passage_nodes = self.chunk_embedding_store.get_text_for_all_rows()
+        entity_to_row = self.entity_embedding_store.get_all_id_to_rows()
+        passage_to_row = self.chunk_embedding_store.get_all_id_to_rows()
 
-        nodes = entity_nodes
-        nodes.update(passage_nodes)
+        node_to_rows = entity_to_row
+        node_to_rows.update(passage_to_row)
 
         new_nodes = {}
-        for node_id, node in nodes.items():
+        for node_id, node in node_to_rows.items():
             node['name'] = node_id
             if node_id not in existing_nodes:
                 for k, v in node.items():
@@ -818,7 +1067,7 @@ class HippoRAG:
         logger.info(
             f"Writing graph with {len(self.graph.vs())} nodes, {len(self.graph.es())} edges"
         )
-        self.graph.write_graphml(self._graphml_xml_file)
+        self.graph.write_pickle(self._graph_pickle_filename)
         logger.info(f"Saving graph completed!")
 
     def get_graph_info(self) -> Dict:
@@ -903,6 +1152,29 @@ class HippoRAG:
         self.passage_embeddings = np.array(self.chunk_embedding_store.get_embeddings(self.passage_node_keys))
 
         self.fact_embeddings = np.array(self.fact_embedding_store.get_embeddings(self.fact_node_keys))
+
+        all_openie_info, chunk_keys_to_process = self.load_existing_openie([])
+
+        self.proc_triples_to_docs = {}
+
+        for doc in all_openie_info:
+            triples = flatten_facts([doc['extracted_triples']])
+            for triple in triples:
+                if len(triple) == 3:
+                    proc_triple = tuple(text_processing(list(triple)))
+                    self.proc_triples_to_docs[str(proc_triple)] = self.proc_triples_to_docs.get(str(proc_triple), set()).union(set([doc['idx']]))
+
+        if self.ent_node_to_chunk_ids is None:
+            ner_results_dict, triple_results_dict = reformat_openie_results(all_openie_info)
+
+            assert len(self.passage_node_keys) == len(ner_results_dict) == len(triple_results_dict), print((len(self.passage_node_keys), len(ner_results_dict), len(triple_results_dict)))
+
+            # prepare data_store
+            chunk_triples = [[text_processing(t) for t in triple_results_dict[chunk_id].triples] for chunk_id in self.passage_node_keys]
+
+            self.node_to_node_stats = {}
+            self.ent_node_to_chunk_ids = {}
+            self.add_fact_edges(self.passage_node_keys, chunk_triples)
 
         self.ready_to_retrieve = True
 
@@ -1102,8 +1374,8 @@ class HippoRAG:
                 if phrase_id is not None:
                     phrase_weights[phrase_id] = fact_score
 
-                    if self.ent_node_to_num_chunk[phrase_key] != 0:
-                        phrase_weights[phrase_id] /= self.ent_node_to_num_chunk[phrase_key]
+                    if len(self.ent_node_to_chunk_ids.get(phrase_key, set())) > 0:
+                        phrase_weights[phrase_id] /= len(self.ent_node_to_chunk_ids[phrase_key])
 
                 if phrase not in phrase_scores:
                     phrase_scores[phrase] = []
@@ -1140,7 +1412,11 @@ class HippoRAG:
         assert sum(node_weights) > 0, f'No phrases found in the graph for the given facts: {top_k_facts}'
 
         #Running PPR algorithm based on the passage and phrase weights previously assigned
+        ppr_start = time.time()
         ppr_sorted_doc_ids, ppr_sorted_doc_scores = self.run_ppr(node_weights, damping=self.global_config.damping)
+        ppr_end = time.time()
+
+        self.ppr_time += (ppr_end - ppr_start)
 
         assert len(ppr_sorted_doc_ids) == len(
             self.passage_node_idxs), f"Doc prob length {len(ppr_sorted_doc_ids)} != corpus length {len(self.passage_node_idxs)}"
