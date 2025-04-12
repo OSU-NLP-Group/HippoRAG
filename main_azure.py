@@ -87,7 +87,10 @@ def main():
 
     save_dir = args.save_dir
     dataset_name = args.dataset
-    save_dir = save_dir + '_' + dataset_name
+    if save_dir == 'outputs':
+        save_dir = save_dir + '/' + dataset_name
+    else:
+        save_dir = save_dir + '_' + dataset_name
 
     llm_base_url = args.llm_base_url
     llm_name = args.llm_name
