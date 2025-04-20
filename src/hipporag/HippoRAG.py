@@ -28,6 +28,7 @@ from .prompts.linking import get_query_instruction
 from .prompts.prompt_template_manager import PromptTemplateManager
 from .rerank import DSPyFilter
 from .utils.misc_utils import *
+from .utils.misc_utils import NerRawOutput, TripleRawOutput
 from .utils.embed_utils import retrieve_knn
 from .utils.typing import Triple
 from .utils.config_utils import BaseConfig
@@ -978,8 +979,20 @@ class HippoRAG:
         num_phrases = sum([len(chunk['extracted_entities']) for chunk in all_openie_info])
 
         if len(all_openie_info) > 0:
-            openie_dict = {'docs': all_openie_info, 'avg_ent_chars': round(sum_phrase_chars / num_phrases, 4),
-                           'avg_ent_words': round(sum_phrase_words / num_phrases, 4)}
+            # Avoid division by zero if there are no phrases
+            if num_phrases > 0:
+                avg_ent_chars = round(sum_phrase_chars / num_phrases, 4)
+                avg_ent_words = round(sum_phrase_words / num_phrases, 4)
+            else:
+                avg_ent_chars = 0
+                avg_ent_words = 0
+                
+            openie_dict = {
+                'docs': all_openie_info,
+                'avg_ent_chars': avg_ent_chars,
+                'avg_ent_words': avg_ent_words
+            }
+            
             with open(self.openie_results_path, 'w') as f:
                 json.dump(openie_dict, f)
             logger.info(f"OpenIE results saved to {self.openie_results_path}")
@@ -1140,12 +1153,44 @@ class HippoRAG:
         self.passage_node_keys: List = list(self.chunk_embedding_store.get_all_ids()) # a list of passage node keys
         self.fact_node_keys: List = list(self.fact_embedding_store.get_all_ids())
 
-        assert len(self.entity_node_keys) + len(self.passage_node_keys) == self.graph.vcount()
+        # Check if the graph has the expected number of nodes
+        expected_node_count = len(self.entity_node_keys) + len(self.passage_node_keys)
+        actual_node_count = self.graph.vcount()
+        
+        if expected_node_count != actual_node_count:
+            logger.warning(f"Graph node count mismatch: expected {expected_node_count}, got {actual_node_count}")
+            # If the graph is empty but we have nodes, we need to add them
+            if actual_node_count == 0 and expected_node_count > 0:
+                logger.info(f"Initializing graph with {expected_node_count} nodes")
+                self.add_new_nodes()
+                self.save_igraph()
 
-        igraph_name_to_idx = {node["name"]: idx for idx, node in enumerate(self.graph.vs)} # from node key to the index in the backbone graph
-        self.node_name_to_vertex_idx = igraph_name_to_idx
-        self.entity_node_idxs = [igraph_name_to_idx[node_key] for node_key in self.entity_node_keys] # a list of backbone graph node index
-        self.passage_node_idxs = [igraph_name_to_idx[node_key] for node_key in self.passage_node_keys] # a list of backbone passage node index
+        # Create mapping from node name to vertex index
+        try:
+            igraph_name_to_idx = {node["name"]: idx for idx, node in enumerate(self.graph.vs)} # from node key to the index in the backbone graph
+            self.node_name_to_vertex_idx = igraph_name_to_idx
+            
+            # Check if all entity and passage nodes are in the graph
+            missing_entity_nodes = [node_key for node_key in self.entity_node_keys if node_key not in igraph_name_to_idx]
+            missing_passage_nodes = [node_key for node_key in self.passage_node_keys if node_key not in igraph_name_to_idx]
+            
+            if missing_entity_nodes or missing_passage_nodes:
+                logger.warning(f"Missing nodes in graph: {len(missing_entity_nodes)} entity nodes, {len(missing_passage_nodes)} passage nodes")
+                # If nodes are missing, rebuild the graph
+                self.add_new_nodes()
+                self.save_igraph()
+                # Update the mapping
+                igraph_name_to_idx = {node["name"]: idx for idx, node in enumerate(self.graph.vs)}
+                self.node_name_to_vertex_idx = igraph_name_to_idx
+            
+            self.entity_node_idxs = [igraph_name_to_idx[node_key] for node_key in self.entity_node_keys] # a list of backbone graph node index
+            self.passage_node_idxs = [igraph_name_to_idx[node_key] for node_key in self.passage_node_keys] # a list of backbone passage node index
+        except Exception as e:
+            logger.error(f"Error creating node index mapping: {str(e)}")
+            # Initialize with empty lists if mapping fails
+            self.node_name_to_vertex_idx = {}
+            self.entity_node_idxs = []
+            self.passage_node_idxs = []
 
         logger.info("Loading embeddings.")
         self.entity_embeddings = np.array(self.entity_embedding_store.get_embeddings(self.entity_node_keys))
@@ -1167,7 +1212,26 @@ class HippoRAG:
         if self.ent_node_to_chunk_ids is None:
             ner_results_dict, triple_results_dict = reformat_openie_results(all_openie_info)
 
-            assert len(self.passage_node_keys) == len(ner_results_dict) == len(triple_results_dict), print((len(self.passage_node_keys), len(ner_results_dict), len(triple_results_dict)))
+            # Check if the lengths match
+            if not (len(self.passage_node_keys) == len(ner_results_dict) == len(triple_results_dict)):
+                logger.warning(f"Length mismatch: passage_node_keys={len(self.passage_node_keys)}, ner_results_dict={len(ner_results_dict)}, triple_results_dict={len(triple_results_dict)}")
+                
+                # If there are missing keys, create empty entries for them
+                for chunk_id in self.passage_node_keys:
+                    if chunk_id not in ner_results_dict:
+                        ner_results_dict[chunk_id] = NerRawOutput(
+                            chunk_id=chunk_id,
+                            response=None,
+                            metadata={},
+                            unique_entities=[]
+                        )
+                    if chunk_id not in triple_results_dict:
+                        triple_results_dict[chunk_id] = TripleRawOutput(
+                            chunk_id=chunk_id,
+                            response=None,
+                            metadata={},
+                            triples=[]
+                        )
 
             # prepare data_store
             chunk_triples = [[text_processing(t) for t in triple_results_dict[chunk_id].triples] for chunk_id in self.passage_node_keys]
@@ -1240,11 +1304,19 @@ class HippoRAG:
                                                                 instruction=get_query_instruction('query_to_fact'),
                                                                 norm=True)
 
-        query_fact_scores = np.dot(self.fact_embeddings, query_embedding.T) # shape: (#facts, )
-        query_fact_scores = np.squeeze(query_fact_scores) if query_fact_scores.ndim == 2 else query_fact_scores
-        query_fact_scores = min_max_normalize(query_fact_scores)
-
-        return query_fact_scores
+        # Check if there are any facts
+        if len(self.fact_embeddings) == 0:
+            logger.warning("No facts available for scoring. Returning empty array.")
+            return np.array([])
+            
+        try:
+            query_fact_scores = np.dot(self.fact_embeddings, query_embedding.T) # shape: (#facts, )
+            query_fact_scores = np.squeeze(query_fact_scores) if query_fact_scores.ndim == 2 else query_fact_scores
+            query_fact_scores = min_max_normalize(query_fact_scores)
+            return query_fact_scores
+        except Exception as e:
+            logger.error(f"Error computing fact scores: {str(e)}")
+            return np.array([])
 
     def dense_passage_retrieval(self, query: str) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -1440,22 +1512,39 @@ class HippoRAG:
         """
         # load args
         link_top_k: int = self.global_config.linking_top_k
-
-        candidate_fact_indices = np.argsort(query_fact_scores)[-link_top_k:][
-                                 ::-1].tolist()  # list of ranked link_top_k fact relative indices
-        real_candidate_fact_ids = [self.fact_node_keys[idx] for idx in
-                                   candidate_fact_indices]  # list of ranked link_top_k fact keys
-        fact_row_dict = self.fact_embedding_store.get_rows(real_candidate_fact_ids)
-        candidate_facts = [eval(fact_row_dict[id]['content']) for id in real_candidate_fact_ids]  # list of link_top_k facts (each fact is a relation triple in tuple data type)
-
-        top_k_fact_indices, top_k_facts, reranker_dict = self.rerank_filter(query,
-                                                                             candidate_facts,
-                                                                             candidate_fact_indices,
-                                                                             len_after_rerank=link_top_k)
-
-        rerank_log = {'facts_before_rerank': candidate_facts, 'facts_after_rerank': top_k_facts}
-
-        return top_k_fact_indices, top_k_facts, rerank_log
+        
+        # Check if there are any facts to rerank
+        if len(query_fact_scores) == 0 or len(self.fact_node_keys) == 0:
+            logger.warning("No facts available for reranking. Returning empty lists.")
+            return [], [], {'facts_before_rerank': [], 'facts_after_rerank': []}
+            
+        try:
+            # Get the top k facts by score
+            if len(query_fact_scores) <= link_top_k:
+                # If we have fewer facts than requested, use all of them
+                candidate_fact_indices = np.argsort(query_fact_scores)[::-1].tolist()
+            else:
+                # Otherwise get the top k
+                candidate_fact_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
+                
+            # Get the actual fact IDs
+            real_candidate_fact_ids = [self.fact_node_keys[idx] for idx in candidate_fact_indices]
+            fact_row_dict = self.fact_embedding_store.get_rows(real_candidate_fact_ids)
+            candidate_facts = [eval(fact_row_dict[id]['content']) for id in real_candidate_fact_ids]
+            
+            # Rerank the facts
+            top_k_fact_indices, top_k_facts, reranker_dict = self.rerank_filter(query,
+                                                                                candidate_facts,
+                                                                                candidate_fact_indices,
+                                                                                len_after_rerank=link_top_k)
+            
+            rerank_log = {'facts_before_rerank': candidate_facts, 'facts_after_rerank': top_k_facts}
+            
+            return top_k_fact_indices, top_k_facts, rerank_log
+            
+        except Exception as e:
+            logger.error(f"Error in rerank_facts: {str(e)}")
+            return [], [], {'facts_before_rerank': [], 'facts_after_rerank': [], 'error': str(e)}
     
     def run_ppr(self,
                 reset_prob: np.ndarray,

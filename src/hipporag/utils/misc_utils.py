@@ -102,7 +102,15 @@ def flatten_facts(chunk_triples: List[Triple]) -> List[Triple]:
     return graph_triples
 
 def min_max_normalize(x):
-    return (x - np.min(x)) / (np.max(x) - np.min(x))
+    min_val = np.min(x)
+    max_val = np.max(x)
+    range_val = max_val - min_val
+    
+    # Handle the case where all values are the same (range is zero)
+    if range_val == 0:
+        return np.ones_like(x)  # Return an array of ones with the same shape as x
+    
+    return (x - min_val) / range_val
 
 def compute_mdhash_id(content: str, prefix: str = "") -> str:
     """
