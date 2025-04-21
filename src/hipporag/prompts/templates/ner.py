@@ -9,7 +9,7 @@ Radio City recently forayed into New Media in May 2008 with the launch of a musi
 
 
 one_shot_ner_output = """{"named_entities":
-    ["Radio City", "India", "3 July 2001", "Hindi", "English", "May 2008", "PlanetRadiocity.com"]
+    ["Radio City", "India", "3 July 2001", "Hindi", "English", "New Media", "May 2008", "PlanetRadiocity.com"]
 }
 """
 
