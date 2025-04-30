@@ -30,6 +30,9 @@ class LLMInput:
 def _extract_ner_from_response(real_response):
     pattern = r'\{[^{}]*"named_entities"\s*:\s*\[[^\]]*\][^{}]*\}'
     match = re.search(pattern, real_response, re.DOTALL)
+    if match is None:
+        # If pattern doesn't match, return an empty list
+        return []
     return eval(match.group())["named_entities"]
 
 
@@ -79,6 +82,9 @@ class OpenIE:
         def _extract_triples_from_response(real_response):
             pattern = r'\{[^{}]*"triples"\s*:\s*\[[^\]]*\][^{}]*\}'
             match = re.search(pattern, real_response, re.DOTALL)
+            if match is None:
+                # If pattern doesn't match, return an empty list
+                return []
             return eval(match.group())["triples"]
 
         # PREPROCESSING
