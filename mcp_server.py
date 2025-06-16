@@ -4,7 +4,7 @@ from src.hipporag.utils.config_utils import BaseConfig
 from src.hipporag.utils.misc_utils import QuerySolution
 from src.hipporag.utils.misc_utils import string_to_bool
 from main import get_gold_docs, get_gold_answers
-import pathlib, logging, os, json
+import json
 import argparse
 import logging
 
@@ -52,15 +52,17 @@ def retrieve(query: str, top_k: int = 10) -> dict:
     name="rag",
     description="Answer a question with retrieved documents"
 )
-def rag(query: str, max_answers: int = 3) -> dict:
+def rag(query: str) -> dict:
     """
     Performs RAG + reasoning and returns top answers with evidence.
     """
-    answers: QuerySolution = hipporag.rag_qa([query])[0]
+    answer, _, _ = hipporag.rag_qa([query])
+    answer: QuerySolution = answer[0]
+    # print(answer)
     return {
-        "question": answers.question,
-        "answers": answers.answer,
-        "docs": answers.docs[:5],
+        "question": query,
+        "answers": answer.answer,
+        "docs": answer.docs[:5],
     }
 
 
@@ -85,6 +87,7 @@ def parse_args():
                         help="OpenIE mode, offline denotes using VLLM offline batch mode for indexing, while online denotes")
     parser.add_argument('--save_dir', type=str, default='outputs', help='Save directory')
     args = parser.parse_args()
+    return args
 
 
 def instantiate_hipporag(args):
@@ -152,4 +155,4 @@ def instantiate_hipporag(args):
 if __name__ == "__main__":
     args = parse_args()
     hipporag = instantiate_hipporag(args)
-    mcp.run()
+    mcp.run("sse")
