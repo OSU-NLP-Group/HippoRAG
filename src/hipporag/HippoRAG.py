@@ -42,8 +42,10 @@ class HippoRAG:
                  save_dir=None,
                  llm_model_name=None,
                  llm_base_url=None,
+                 llm_api_key=None,
                  embedding_model_name=None,
                  embedding_base_url=None,
+                 embedding_api_key=None,
                  azure_endpoint=None,
                  azure_embedding_endpoint=None):
         """
@@ -56,11 +58,13 @@ class HippoRAG:
                 to `outputs` if no value is provided.
             llm_model (BaseLLM): The language model used for processing based on the global
                 configuration settings.
+            llm_api_key (str): The API key for accessing the language model, if applicable.
             openie (Union[OpenIE, VLLMOfflineOpenIE]): The Open Information Extraction module
                 configured in either online or offline mode based on the global settings.
             graph: The graph instance initialized by the `initialize_graph` method.
             embedding_model (BaseEmbeddingModel): The embedding model associated with the current
                 configuration.
+            embedding_api_key (str): The API key for accessing the embedding model, if applicable.
             chunk_embedding_store (EmbeddingStore): The embedding store handling chunk embeddings.
             entity_embedding_store (EmbeddingStore): The embedding store handling entity embeddings.
             fact_embedding_store (EmbeddingStore): The embedding store handling fact embeddings.
@@ -93,9 +97,15 @@ class HippoRAG:
 
         if llm_model_name is not None:
             self.global_config.llm_name = llm_model_name
+        
+        if llm_api_key is not None:
+            self.global_config.llm_api_key = llm_api_key
 
         if embedding_model_name is not None:
             self.global_config.embedding_model_name = embedding_model_name
+        
+        if embedding_api_key is not None:
+            self.global_config.embedding_api_key = embedding_api_key
 
         if llm_base_url is not None:
             self.global_config.llm_base_url = llm_base_url

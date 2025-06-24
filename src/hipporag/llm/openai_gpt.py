@@ -145,7 +145,11 @@ class CacheOpenAI(BaseLLM):
         self.max_retries = kwargs.get("max_retries", 2)
 
         if self.global_config.azure_endpoint is None:
-            self.openai_client = OpenAI(base_url=self.llm_base_url, http_client=client, max_retries=self.max_retries)
+            if self.global_config.llm_api_key is not None:
+                self.openai_client = OpenAI(api_key=self.global_config.llm_api_key,
+                                            base_url=self.llm_base_url, http_client=client, max_retries=self.max_retries)
+            else:
+                self.openai_client = OpenAI(base_url=self.llm_base_url, http_client=client, max_retries=self.max_retries)
         else:
             self.openai_client = AzureOpenAI(api_version=self.global_config.azure_endpoint.split('api-version=')[1],
                                              azure_endpoint=self.global_config.azure_endpoint, max_retries=self.max_retries)

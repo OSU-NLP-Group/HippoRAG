@@ -31,9 +31,13 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
             f"Initializing {self.__class__.__name__}'s embedding model with params: {self.embedding_config.model_init_params}")
 
         if self.global_config.azure_embedding_endpoint is None:
-            self.client = OpenAI(
-                base_url=self.global_config.embedding_base_url
-            )
+            if self.global_config.embedding_api_key is not None:
+                self.client = OpenAI(api_key=self.global_config.embedding_api_key,
+                                     base_url=self.global_config.embedding_base_url)
+            else:
+                self.client = OpenAI(
+                    base_url=self.global_config.embedding_base_url
+                )
         else:
             self.client = AzureOpenAI(api_version=self.global_config.azure_embedding_endpoint.split('api-version=')[1],
                                       azure_endpoint=self.global_config.azure_embedding_endpoint)
