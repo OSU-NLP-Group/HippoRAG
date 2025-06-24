@@ -1424,11 +1424,15 @@ class HippoRAG:
                 - The first array corresponds to document IDs sorted based on their scores.
                 - The second array consists of the PPR scores associated with the sorted document IDs.
         """
+
         #Assigning phrase weights based on selected facts from previous steps.
         linking_score_map = {}  # from phrase to the average scores of the facts that contain the phrase
         phrase_scores = {}  # store all fact scores for each phrase regardless of whether they exist in the knowledge graph or not
         phrase_weights = np.zeros(len(self.graph.vs['name']))
         passage_weights = np.zeros(len(self.graph.vs['name']))
+        number_of_occurs = np.zeros(len(self.graph.vs['name']))
+
+        phrases_and_ids = set()
 
         for rank, f in enumerate(top_k_facts):
             subject_phrase = f[0].lower()
@@ -1436,6 +1440,7 @@ class HippoRAG:
             object_phrase = f[2].lower()
             fact_score = query_fact_scores[
                 top_k_fact_indices[rank]] if query_fact_scores.ndim > 0 else query_fact_scores
+
             for phrase in [subject_phrase, object_phrase]:
                 phrase_key = compute_mdhash_id(
                     content=phrase,
@@ -1444,14 +1449,23 @@ class HippoRAG:
                 phrase_id = self.node_name_to_vertex_idx.get(phrase_key, None)
 
                 if phrase_id is not None:
-                    phrase_weights[phrase_id] = fact_score
+                    weighted_fact_score = fact_score
 
                     if len(self.ent_node_to_chunk_ids.get(phrase_key, set())) > 0:
-                        phrase_weights[phrase_id] /= len(self.ent_node_to_chunk_ids[phrase_key])
+                        weighted_fact_score /= len(self.ent_node_to_chunk_ids[phrase_key])
 
-                if phrase not in phrase_scores:
-                    phrase_scores[phrase] = []
-                phrase_scores[phrase].append(fact_score)
+                    phrase_weights[phrase_id] += weighted_fact_score
+                    number_of_occurs[phrase_id] += 1
+
+                phrases_and_ids.add((phrase, phrase_id))
+
+        phrase_weights /= number_of_occurs
+
+        for phrase, phrase_id in phrases_and_ids:
+            if phrase not in phrase_scores:
+                phrase_scores[phrase] = []
+
+            phrase_scores[phrase].append(phrase_weights[phrase_id])
 
         # calculate average fact score for each phrase
         for phrase, scores in phrase_scores.items():

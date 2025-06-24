@@ -5,7 +5,7 @@ with open("README.md", "r") as f:
 
 setuptools.setup(
     name="hipporag",
-    version="2.0.0-alpha.2",
+    version="2.0.0-alpha.4",
     author="Bernal Jimenez Gutierrez",
     author_email="jimenezgutierrez.1@osu.edu",
     description="A powerful graph-based RAG framework that enables LLMs to identify and leverage connections within new knowledge for improved retrieval.",
@@ -19,7 +19,8 @@ setuptools.setup(
         "torch==2.5.1",
         "transformers==4.45.2",
         "vllm==0.6.6.post1",
-        "openai==1.58.1",
+        "openai==1.91.1",
+        "litellm==1.73.1",
         "gritlm==1.0.2",
         "networkx==3.4.2",
         "python_igraph==0.11.8",
@@ -28,5 +29,6 @@ setuptools.setup(
         "tenacity==8.5.0",
         "einops", # No version specified
         "tqdm", # No version specified
+        "boto3", # No version specified
     ]
 )

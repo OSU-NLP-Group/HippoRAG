@@ -1,4 +1,5 @@
-openai==1.58.1
+openai==1.91.1
+litellm==1.73.1
 vllm==0.6.6.post1
 gritlm==1.0.2
 torch==2.5.1
@@ -13,3 +14,4 @@ numpy
 scipy
 tqdm
 einops
+boto3
