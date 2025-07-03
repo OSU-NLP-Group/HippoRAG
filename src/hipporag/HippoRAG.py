@@ -321,6 +321,9 @@ class HippoRAG:
 
             if len(non_deleted_docs) == 0:
                 true_triples_to_delete.append(triple)
+                del self.proc_triples_to_docs[str(proc_triple)]
+            else:
+                self.proc_triples_to_docs[str(proc_triple)] = non_deleted_docs
 
         processed_true_triples_to_delete = [[text_processing(list(triple)) for triple in true_triples_to_delete]]
         entities_to_delete, _ = extract_entity_nodes(processed_true_triples_to_delete)
@@ -340,6 +343,9 @@ class HippoRAG:
 
             if len(non_deleted_docs) == 0:
                 filtered_ent_ids_to_delete.append(ent_node)
+                del self.ent_node_to_chunk_ids[ent_node]
+            else:
+                self.ent_node_to_chunk_ids[ent_node] = non_deleted_docs
 
         logger.info(f"Deleting {len(chunk_ids_to_delete)} Chunks")
         logger.info(f"Deleting {len(triple_ids_to_delete)} Triples")
