@@ -749,7 +749,7 @@ class HippoRAG:
             Does not explicitly raise exceptions within the provided function logic.
         """
 
-        if "name" in self.graph.vs:
+        if "name" in self.graph.vs.attribute_names():
             current_graph_nodes = set(self.graph.vs["name"])
         else:
             current_graph_nodes = set()
