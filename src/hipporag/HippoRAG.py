@@ -759,23 +759,23 @@ class HippoRAG:
         for chunk_key, triples in tqdm(zip(chunk_ids, chunk_triples)):
             entities_in_chunk = set()
 
-            if chunk_key not in current_graph_nodes:
-                for triple in triples:
-                    triple = tuple(triple)
+            for triple in triples:
+                triple = tuple(triple)
 
-                    node_key = compute_mdhash_id(content=triple[0], prefix=("entity-"))
-                    node_2_key = compute_mdhash_id(content=triple[2], prefix=("entity-"))
+                node_key = compute_mdhash_id(content=triple[0], prefix=("entity-"))
+                node_2_key = compute_mdhash_id(content=triple[2], prefix=("entity-"))
 
+                entities_in_chunk.add(node_key)
+                entities_in_chunk.add(node_2_key)
+
+                if chunk_key not in current_graph_nodes:
                     self.node_to_node_stats[(node_key, node_2_key)] = self.node_to_node_stats.get(
                         (node_key, node_2_key), 0.0) + 1
                     self.node_to_node_stats[(node_2_key, node_key)] = self.node_to_node_stats.get(
                         (node_2_key, node_key), 0.0) + 1
 
-                    entities_in_chunk.add(node_key)
-                    entities_in_chunk.add(node_2_key)
-
-                for node in entities_in_chunk:
-                    self.ent_node_to_chunk_ids[node] = self.ent_node_to_chunk_ids.get(node, set()).union(set([chunk_key]))
+            for node in entities_in_chunk:
+                self.ent_node_to_chunk_ids[node] = self.ent_node_to_chunk_ids.get(node, set()).union(set([chunk_key]))
 
     def add_passage_edges(self, chunk_ids: List[str], chunk_triple_entities: List[List[str]]):
         """
