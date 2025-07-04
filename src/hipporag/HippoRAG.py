@@ -299,13 +299,13 @@ class HippoRAG:
         all_openie_info, chunk_keys_to_process = self.load_existing_openie([])
         triples_to_delete = []
 
-        all_openie_info_with_deletes = []
+        all_openie_info_without_deletes = []
 
         for openie_doc in all_openie_info:
             if openie_doc['idx'] in chunk_ids_to_delete:
                 triples_to_delete.append(openie_doc['extracted_triples'])
             else:
-                all_openie_info_with_deletes.append(openie_doc)
+                all_openie_info_without_deletes.append(openie_doc)
 
         triples_to_delete = flatten_facts(triples_to_delete)
 
@@ -351,7 +351,7 @@ class HippoRAG:
         logger.info(f"Deleting {len(triple_ids_to_delete)} Triples")
         logger.info(f"Deleting {len(filtered_ent_ids_to_delete)} Entities")
 
-        self.save_openie_results(all_openie_info_with_deletes)
+        self.save_openie_results(all_openie_info_without_deletes)
 
         self.entity_embedding_store.delete(filtered_ent_ids_to_delete)
         self.fact_embedding_store.delete(triple_ids_to_delete)
