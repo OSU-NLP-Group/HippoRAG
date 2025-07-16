@@ -1,4 +1,4 @@
-openai==1.91.1
+openai>=1.91.0
 litellm==1.73.1
 vllm==0.6.6.post1
 gritlm==1.0.2
