@@ -19,7 +19,7 @@ def _get_llm_class(config: BaseConfig):
     if config.llm_name.startswith('bedrock'):
         return BedrockLLM(config)
     
-    if config.llm_name.startswith('Transfomers/'):
+    if config.llm_name.startswith('Transformers/'):
         return TransformersLLM(config)
     
     return CacheOpenAI.from_experiment_config(config)
