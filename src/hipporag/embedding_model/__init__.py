@@ -5,6 +5,7 @@ from .NVEmbedV2 import NVEmbedV2EmbeddingModel
 from .OpenAI import OpenAIEmbeddingModel
 from .Cohere import CohereEmbeddingModel
 from .Transformers import TransformersEmbeddingModel
+from .VLLM import VLLMEmbeddingModel
 
 from ..utils.logging_utils import get_logger
 
@@ -24,4 +25,6 @@ def _get_embedding_model_class(embedding_model_name: str = "nvidia/NV-Embed-v2")
         return CohereEmbeddingModel
     elif embedding_model_name.startswith("Transformers/"):
         return TransformersEmbeddingModel
+    elif embedding_model_name.startswith("VLLM/"):
+        return VLLMEmbeddingModel
     assert False, f"Unknown embedding model name: {embedding_model_name}"
