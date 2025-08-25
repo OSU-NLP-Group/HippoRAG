@@ -1,7 +1,8 @@
 from typing import Tuple, List
 import torch.cuda
 import outlines.generate as generate
-import outlines.models.transformers as models
+import outlines.models as models
+import json
 
 from .base import BaseLLM, LLMConfig
 from ..utils.llm_utils import TextChatMessage, get_pydantic_model
@@ -51,8 +52,8 @@ class TransformersOffline:
         logger.info(f"Calling Transformers offline, # of messages {len(messages)}")
         messages_list = [messages]
         prompt_text = convert_text_chat_messages_to_input_string(messages_list, self.tokenizer)
-
-        transformers_output = self.model.generate(prompt_text, max_tokens=max_tokens)
+        input_ids = self.tokenizer.encode(prompt_text)
+        transformers_output = self.model.generate(input_ids, max_new_tokens=max_tokens)
         response = transformers_output[0]['generated_text']
         prompt_tokens = len(self.tokenizer.encode(prompt_text))
         completion_tokens = len(self.tokenizer.encode(response))
@@ -79,7 +80,7 @@ class TransformersOffline:
             for i in range(0, len(all_prompt_texts), 4):
                 transformers_output = self.model.generate(all_prompt_texts[i:i+4], max_tokens=max_tokens)
 
-        all_responses = [completion for completion in transformers_output]
+        all_responses = [completion.model_dump_json() for completion in transformers_output]
         all_prompt_tokens = [len(self.tokenizer.encode(prompt)) for prompt in all_prompt_texts]
         all_completion_tokens = [len(self.tokenizer.encode(response)) for response in all_responses]
 
