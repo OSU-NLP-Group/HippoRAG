@@ -16,7 +16,7 @@ class VLLMEmbeddingModel(BaseEmbeddingModel):
     def __init__(self, global_config:BaseConfig, embedding_model_name:str) -> None:
         super().__init__(global_config=global_config)
 
-        self.model_id = embedding_model_name.strip("VLLM/")
+        self.model_id = embedding_model_name[len("VLLM/"):]
         self.embedding_type = 'float'
         self.batch_size = 32
 
