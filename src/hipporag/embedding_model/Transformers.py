@@ -1,6 +1,7 @@
 from typing import List
 import json
 
+import torch
 import numpy as np
 from tqdm import tqdm
 
@@ -12,7 +13,7 @@ from transformers import AutoModel, AutoTokenizer
 class TransformersEmbeddingModel(BaseEmbeddingModel):
     """
     To select this implementation you can initialise HippoRAG with:
-        embedding_model_name includes "/"
+        embedding_model_name starts with "Transformers/"
     """
     def __init__(self, global_config:BaseConfig, embedding_model_name:str) -> None:
         super().__init__(global_config=global_config)
