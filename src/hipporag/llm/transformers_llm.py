@@ -13,7 +13,20 @@ from filelock import FileLock
 from .base import BaseLLM, LLMConfig
 from ..utils.llm_utils import TextChatMessage
 from ..utils.logging_utils import get_logger
-from .transformers_offline import convert_text_chat_messages_to_input_string
+
+def convert_text_chat_messages_to_input_ids(messages: List[TextChatMessage], tokenizer, add_assistant_header=True) -> str:
+    prompt = tokenizer.apply_chat_template(
+        conversation=messages,
+        chat_template=None,
+        tokenize=False,
+        add_generation_prompt=True,
+        continue_final_message=False,
+        tools=None,
+        documents=None,
+    )
+    input_ids = tokenizer.encode(prompt, return_tensors="pt")
+    return input_ids
+
 
 logger = get_logger(__name__)
 
@@ -77,9 +90,8 @@ class TransformersLLM(BaseLLM):
         self.cache = LLM_Cache(
             os.path.join(global_config.save_dir, "llm_cache"),
             self.llm_name.replace('/', '_'))
-        
-        self.model = AutoModelForCausalLM.from_pretrained(self.global_config.llm_name.strip("Transformers/"), device_map='auto', torch_dtype = torch.bfloat16)
-        self.tokenizer = AutoTokenizer.from_pretrained(self.global_config.llm_name.strip("Transformers/"))
+        self.model = AutoModelForCausalLM.from_pretrained(self.global_config.llm_name, device_map='auto', torch_dtype = torch.bfloat16)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.global_config.llm_name)
 
         self.retry = 5
         
@@ -87,7 +99,7 @@ class TransformersLLM(BaseLLM):
 
     def _init_llm_config(self) -> None:
         config_dict = self.global_config.__dict__
-        config_dict['llm_name'] = self.global_config.llm_name.strip("Transformers/")
+        config_dict['llm_name'] = self.global_config.llm_name[len("Transformers/"):]
         config_dict['generate_params'] = {
                 "n": 1,
                 "temperature": config_dict.get("temperature", 0.0),
@@ -97,15 +109,17 @@ class TransformersLLM(BaseLLM):
         logger.info(f"[TransformersLLM] Config: {self.llm_config}")
 
     def __llm_call(self, params):
-        response = self.model.generate(params["prompt_text"], max_tokens=params["max_tokens"])
+        inputs = params["prompt_text"].to(self.model.device)
+        response = self.model.generate(inputs, max_new_tokens=params.get("max_tokens", 200))
         return response
     
     def infer(self, messages: List[TextChatMessage], **kwargs) -> Tuple[List[TextChatMessage], dict]:
         params = deepcopy(self.llm_config.generate_params)
         if kwargs:
             params.update(kwargs)
+        params["model"] = self.global_config.llm_name
         params["messages"] = messages
-        params["prompt_text"] = convert_text_chat_messages_to_input_string(messages, self.tokenizer)
+        params["prompt_text"] = convert_text_chat_messages_to_input_ids(messages, self.tokenizer)
         
         cache_lookup = self.cache.read(params)
         if cache_lookup is not None:
@@ -114,10 +128,10 @@ class TransformersLLM(BaseLLM):
         else:
             cached = False
             response = self.__llm_call(params)
-            message = response
+            message = self.tokenizer.decode(response[0], skip_special_tokens=True)
             metadata = {
-                "prompt_tokens": len(self.tokenizer.encode(params["prompt_text"])), 
-                "completion_tokens": len(self.tokenizer.encode(response)),
+                "prompt_tokens": params["prompt_text"].shape[1], 
+                "completion_tokens": response.shape[1],
             }
             self.cache.write(params, message, metadata)
 
