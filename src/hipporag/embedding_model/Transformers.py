@@ -8,7 +8,7 @@ from tqdm import tqdm
 from .base import BaseEmbeddingModel
 from ..utils.config_utils import BaseConfig
 from ..prompts.linking import get_query_instruction
-from transformers import AutoModel, AutoTokenizer
+from sentence_transformers import SentenceTransformer
 
 class TransformersEmbeddingModel(BaseEmbeddingModel):
     """
@@ -18,12 +18,11 @@ class TransformersEmbeddingModel(BaseEmbeddingModel):
     def __init__(self, global_config:BaseConfig, embedding_model_name:str) -> None:
         super().__init__(global_config=global_config)
 
-        self.model_id = embedding_model_name.strip("Transformers/")
+        self.model_id = embedding_model_name[len("Transformers/"):]
         self.embedding_type = 'float'
         self.batch_size = 64
 
-        self.model = AutoModel.from_pretrained(self.model_id, device = "cuda" if torch.cuda.is_available() else "cpu")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+        self.model = SentenceTransformer(self.model_id, device = "cuda" if torch.cuda.is_available() else "cpu")
 
         self.search_query_instr = set([
             get_query_instruction('query_to_fact'),
