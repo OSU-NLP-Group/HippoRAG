@@ -1,11 +1,15 @@
 import json
 import re
+import pydantic
 from string import Template
 from typing import (
     Optional,
     Union,
     List,
-    TypedDict
+    TypedDict,
+    Tuple,
+    Dict,
+    Type
 )
 
 from openai import (
@@ -327,3 +331,106 @@ def num_tokens_by_tiktoken(text: str):
     enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
     return len(enc.encode(text))
+
+
+class NerModel(pydantic.BaseModel):
+    """
+    For NER, the structure is:
+    schema:
+    {
+        "type": "object",
+        "properties": { "named_entities": { "type": "array", "items": { "type": "string" } } },
+        "required": ["named_entities"]
+    }
+    """
+    named_entities: List[str]
+
+class TriplesModel(pydantic.BaseModel):
+    """
+    For triples extraction, the structure is:
+    schema:
+    {
+        "type": "object",
+        "properties": { "triples": { "type": "array", "items": { "type": "array", "items": { "type": "string" }, "maxItems": 3, "minItems": 3 } } },
+        "required": ["triples"]
+    }
+    """
+    triples: List[Tuple[str, str, str]]
+
+class FactModel(pydantic.BaseModel):
+    """
+    For fact extraction, the structure is:
+    schema:
+    {
+        "type": "object",
+        "properties": { "fact": { "type": "array", "items": { "type": "array", "items": { "type": "string" }, "maxItems": 3, "minItems": 3 } } },
+        "required": ["fact"]
+    }
+    """
+    fact: List[Tuple[str, str, str]]
+
+class ArbitraryJsonModel(pydantic.BaseModel):
+    """
+    For generating arbitrary JSON objects.
+    In Pydantic V2, by setting extra='allow', this model can accept any fields that are not explicitly defined in the model.
+    This fully matches the loose schema definition of { "type": "object" }.
+    schema:
+    {
+        "type": "object"
+    }
+    """
+    model_config = pydantic.ConfigDict(extra='allow')
+
+class QaCotModel(pydantic.BaseModel):
+    """
+    For Chain-of-Thought QA, the structure is:
+    schema:
+    {
+        "type": "object",
+        "required": ["Thought", "Answer"],
+        "properties": {
+            "Thought": { "type": "string", "minLength": 1, "maxLength": 2000 },
+            "Answer": { "type": "string", "minLength": 1, "maxLength": 200 }
+        }
+    }
+    """
+    Thought: str = pydantic.Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="The model's thinking process"
+    )
+    Answer: str = pydantic.Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="The model's final answer"
+    )
+
+MODEL_TEMPLATES: Dict[str, Type[pydantic.BaseModel]] = {
+    "ner": NerModel,
+    "triples": TriplesModel,
+    "fact": FactModel,
+    "json": ArbitraryJsonModel,
+    "qa_cot": QaCotModel,
+}
+
+def get_pydantic_model(template_name: str) -> Type[pydantic.BaseModel]:
+    """
+    A factory function that returns the corresponding Pydantic model class based on the template name (key).
+
+    Args:
+        template_name: The name of the template (e.g., 'ner', 'triples').
+
+    Returns:
+        The corresponding Pydantic.BaseModel subclass.
+
+    Raises:
+        ValueError: If the provided template_name is invalid.
+    """
+    model_class = MODEL_TEMPLATES.get(template_name)
+    if model_class is None:
+        available_keys = ", ".join(MODEL_TEMPLATES.keys())
+        raise ValueError(f"Unknown template name: '{template_name}'. Available templates: {available_keys}")
+    
+    return model_class

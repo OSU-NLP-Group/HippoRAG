@@ -22,6 +22,7 @@ from .embedding_model import _get_embedding_model_class, BaseEmbeddingModel
 from .embedding_store import EmbeddingStore
 from .information_extraction import OpenIE
 from .information_extraction.openie_vllm_offline import VLLMOfflineOpenIE
+from .information_extraction.openie_transformers_offline import TransformersOfflineOpenIE
 from .evaluation.retrieval_eval import RetrievalRecall
 from .evaluation.qa_eval import QAExactMatch, QAF1Score
 from .prompts.linking import get_query_instruction
@@ -127,6 +128,8 @@ class HippoRAG:
             self.openie = OpenIE(llm_model=self.llm_model)
         elif self.global_config.openie_mode == 'offline':
             self.openie = VLLMOfflineOpenIE(self.global_config)
+        elif self.global_config.openie_mode ==  'Transformers-offline':
+            self.openie = TransformersOfflineOpenIE(self.global_config)
 
         self.graph = self.initialize_graph()
 
@@ -244,7 +247,7 @@ class HippoRAG:
 
         ner_results_dict, triple_results_dict = reformat_openie_results(all_openie_info)
 
-        assert len(chunk_to_rows) == len(ner_results_dict) == len(triple_results_dict)
+        assert len(chunk_to_rows) == len(ner_results_dict) == len(triple_results_dict), f"len(chunk_to_rows): {len(chunk_to_rows)}, len(ner_results_dict): {len(ner_results_dict)}, len(triple_results_dict): {len(triple_results_dict)}"
 
         # prepare data_store
         chunk_ids = list(chunk_to_rows.keys())
@@ -955,9 +958,15 @@ class HippoRAG:
 
         for chunk_key, row in chunks_to_save.items():
             passage = row['content']
-            chunk_openie_info = {'idx': chunk_key, 'passage': passage,
+            try:
+                chunk_openie_info = {'idx': chunk_key, 'passage': passage,
                                  'extracted_entities': ner_results_dict[chunk_key].unique_entities,
                                  'extracted_triples': triple_results_dict[chunk_key].triples}
+            except Exception as e:
+                logger.error(f"Error processing chunk {chunk_key}: {e}")
+                chunk_openie_info = {'idx': chunk_key, 'passage': passage,
+                                 'extracted_entities': [],
+                                 'extracted_triples': []}
             all_openie_info.append(chunk_openie_info)
 
         return all_openie_info
