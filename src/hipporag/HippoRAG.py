@@ -302,13 +302,13 @@ class HippoRAG:
         all_openie_info, chunk_keys_to_process = self.load_existing_openie([])
         triples_to_delete = []
 
-        all_openie_info_with_deletes = []
+        all_openie_info_without_deletes = []
 
         for openie_doc in all_openie_info:
             if openie_doc['idx'] in chunk_ids_to_delete:
                 triples_to_delete.append(openie_doc['extracted_triples'])
             else:
-                all_openie_info_with_deletes.append(openie_doc)
+                all_openie_info_without_deletes.append(openie_doc)
 
         triples_to_delete = flatten_facts(triples_to_delete)
 
@@ -324,6 +324,9 @@ class HippoRAG:
 
             if len(non_deleted_docs) == 0:
                 true_triples_to_delete.append(triple)
+                del self.proc_triples_to_docs[str(proc_triple)]
+            else:
+                self.proc_triples_to_docs[str(proc_triple)] = non_deleted_docs
 
         processed_true_triples_to_delete = [[text_processing(list(triple)) for triple in true_triples_to_delete]]
         entities_to_delete, _ = extract_entity_nodes(processed_true_triples_to_delete)
@@ -343,12 +346,15 @@ class HippoRAG:
 
             if len(non_deleted_docs) == 0:
                 filtered_ent_ids_to_delete.append(ent_node)
+                del self.ent_node_to_chunk_ids[ent_node]
+            else:
+                self.ent_node_to_chunk_ids[ent_node] = non_deleted_docs
 
         logger.info(f"Deleting {len(chunk_ids_to_delete)} Chunks")
         logger.info(f"Deleting {len(triple_ids_to_delete)} Triples")
         logger.info(f"Deleting {len(filtered_ent_ids_to_delete)} Entities")
 
-        self.save_openie_results(all_openie_info_with_deletes)
+        self.save_openie_results(all_openie_info_without_deletes)
 
         self.entity_embedding_store.delete(filtered_ent_ids_to_delete)
         self.fact_embedding_store.delete(triple_ids_to_delete)
@@ -746,7 +752,7 @@ class HippoRAG:
             Does not explicitly raise exceptions within the provided function logic.
         """
 
-        if "name" in self.graph.vs:
+        if "name" in self.graph.vs.attribute_names():
             current_graph_nodes = set(self.graph.vs["name"])
         else:
             current_graph_nodes = set()
@@ -756,23 +762,23 @@ class HippoRAG:
         for chunk_key, triples in tqdm(zip(chunk_ids, chunk_triples)):
             entities_in_chunk = set()
 
-            if chunk_key not in current_graph_nodes:
-                for triple in triples:
-                    triple = tuple(triple)
+            for triple in triples:
+                triple = tuple(triple)
 
-                    node_key = compute_mdhash_id(content=triple[0], prefix=("entity-"))
-                    node_2_key = compute_mdhash_id(content=triple[2], prefix=("entity-"))
+                node_key = compute_mdhash_id(content=triple[0], prefix=("entity-"))
+                node_2_key = compute_mdhash_id(content=triple[2], prefix=("entity-"))
 
+                entities_in_chunk.add(node_key)
+                entities_in_chunk.add(node_2_key)
+
+                if chunk_key not in current_graph_nodes:
                     self.node_to_node_stats[(node_key, node_2_key)] = self.node_to_node_stats.get(
                         (node_key, node_2_key), 0.0) + 1
                     self.node_to_node_stats[(node_2_key, node_key)] = self.node_to_node_stats.get(
                         (node_2_key, node_key), 0.0) + 1
 
-                    entities_in_chunk.add(node_key)
-                    entities_in_chunk.add(node_2_key)
-
-                for node in entities_in_chunk:
-                    self.ent_node_to_chunk_ids[node] = self.ent_node_to_chunk_ids.get(node, set()).union(set([chunk_key]))
+            for node in entities_in_chunk:
+                self.ent_node_to_chunk_ids[node] = self.ent_node_to_chunk_ids.get(node, set()).union(set([chunk_key]))
 
     def add_passage_edges(self, chunk_ids: List[str], chunk_triple_entities: List[List[str]]):
         """
