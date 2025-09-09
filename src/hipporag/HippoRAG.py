@@ -514,7 +514,7 @@ class HippoRAG:
 
             # Save retrieval and QA results
             for idx, q in enumerate(queries_solutions):
-                q.gold_answers = list(gold_answers[idx])
+                q.gold_answers = [gold_answers[idx]]
                 if gold_docs is not None:
                     q.gold_docs = gold_docs[idx]
 
@@ -659,7 +659,7 @@ class HippoRAG:
 
             # Save retrieval and QA results
             for idx, q in enumerate(queries_solutions):
-                q.gold_answers = list(gold_answers[idx])
+                q.gold_answers = [gold_answers[idx]]
                 if gold_docs is not None:
                     q.gold_docs = gold_docs[idx]
 
