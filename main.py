@@ -129,14 +129,23 @@ def main():
         openie_mode=args.openie_mode
     )
 
-    logging.basicConfig(level=logging.INFO)
+    logging.getLogger().setLevel(logging.INFO)
 
     hipporag = HippoRAG(global_config=config)
 
     hipporag.index(docs)
 
     # Retrieval and QA
-    hipporag.rag_qa(queries=all_queries, gold_docs=gold_docs, gold_answers=gold_answers)
+    _, _, _, retrieval_metrics, qa_metrics = hipporag.rag_qa(
+        queries=all_queries, 
+        gold_docs=gold_docs, 
+        gold_answers=gold_answers
+    )
+
+    print("\n" + "="*10 + " EVALUATION METRICS " + "="*10)
+    print("Retrieval Metrics:", retrieval_metrics)
+    print("QA Metrics:", qa_metrics)
+    print("="*40)
 
 if __name__ == "__main__":
     main()

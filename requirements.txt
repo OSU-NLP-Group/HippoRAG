@@ -14,4 +14,4 @@ numpy
 scipy
 tqdm
 einops
-boto3
+# boto3
