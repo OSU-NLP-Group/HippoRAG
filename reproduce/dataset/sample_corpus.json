@@ -1,17 +1,34 @@
 [
   {
-    "title": "Thomas C. Sudhof",
-    "text": "Introduction\nThomas Christian Sudhof (German pronunciation: ['to:mas 'zy:t,ho:f] i; born December 22, 1955), ForMemRS, is a German-American biochemist known for his study of synaptic transmission. Currently, he is a professor in the school of medicine in the department of molecular and cellular physiology, and by courtesy in neurology, and in psychiatry and behavioral sciences at Stanford University.",
-    "idx": 0
+    "title": "Python (programming language)",
+    "text": "Python is a high-level, general-purpose programming language. Its design philosophy emphasizes code readability with the use of significant indentation. Python was created by Guido van Rossum and first released in 1991."
   },
   {
-    "title": "David Eagleman",
-    "text": "Introduction\nDavid Eagleman (born April 25, 1971) is an American neuroscientist, author, and science communicator. He teaches neuroscience at Stanford University[1] and is CEO and co-founder of Neosensory, a company that develops devices for sensory substitution. [2] He also directs the non-profit Center for Science and Law, which seeks to align the legal system with modern neuroscience[3] and is Chief Science Officer and co-founder of BrainCheck, a digital cognitive health platform used in medical practices and health systems.",
-    "idx": 1
+    "title": "Guido van Rossum",
+    "text": "Guido van Rossum is a Dutch programmer best known as the creator of the Python programming language. He attended the University of Amsterdam, where he received a master's degree in mathematics and computer science in 1982."
   },
   {
-    "title": "Karl Deisseroth",
-    "text": "Introduction\nKarl Alexander Deisseroth (born November 18, 1971) is an American scientist. He is the D.H. Chen Foundation Professor of Bioengineering and of psychiatry and behavioral sciences at Stanford University. He is known for creating and developing the technologies of hydrogel-tissue chemistry (e.g., CLARITY, STARmap) and optogenetics, and for applying integrated optical and genetic strategies to study normal neural circuit function, as well as dysfunction in neurological and psychiatric disease.",
-    "idx": 2
+    "title": "University of Amsterdam",
+    "text": "The University of Amsterdam is a public research university located in Amsterdam, Netherlands. Established in 1632, it is the third-oldest university in the Netherlands."
+  },
+  {
+    "title": "Transformer (deep learning model)",
+    "text": "The Transformer is a deep learning architecture introduced in 2017 by researchers at Google. The seminal paper Attention Is All You Need was co-authored by Ashish Vaswani, Noam Shazeer, Niki Parmar, and Jakob Uszkoreit."
+  },
+  {
+    "title": "Ashish Vaswani",
+    "text": "Ashish Vaswani is a computer scientist known for his work in deep learning. He completed his PhD in Computer Science at the University of Southern California (USC) before joining Google Brain as a research scientist."
+  },
+  {
+    "title": "University of Southern California",
+    "text": "The University of Southern California (USC) is a private research university in Los Angeles, California. Founded in 1880, it is the oldest private research university in California."
+  },
+  {
+    "title": "Oppenheimer (film)",
+    "text": "Oppenheimer is a 2023 biographical drama film written and directed by Christopher Nolan. The film won seven Academy Awards at the 96th Oscars, including the prestigious Best Picture award."
+  },
+  {
+    "title": "Christopher Nolan",
+    "text": "Christopher Nolan is a British-American filmmaker known for his Hollywood blockbusters with complex storytelling. He directed critically acclaimed films like Inception, Interstellar, and Oppenheimer."
   }
 ]

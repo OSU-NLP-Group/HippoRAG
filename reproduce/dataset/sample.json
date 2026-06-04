@@ -1,17 +1,69 @@
 [
   {
-    "id": "sample/question_1.json",
-    "question": "Which Stanford University professor works on Alzheimer's?",
-    "answer": [
-      "Thomas C. Sudhof"
-    ],
-    "answerable": true,
+    "question": "Which university did the creator of the Python programming language attend?",
+    "answer": "University of Amsterdam",
     "paragraphs": [
       {
-        "title": "Thomas C. Sudhof",
-        "text": "Introduction\nThomas Christian Sudhof (German pronunciation: ['to:mas 'zy:t,ho:f] i; born December 22, 1955), ForMemRS, is a German-American biochemist known for his study of synaptic transmission. Currently, he is a professor in the school of medicine in the department of molecular and cellular physiology, and by courtesy in neurology, and in psychiatry and behavioral sciences at Stanford University.",
-        "is_supporting": true,
-        "idx": 0
+        "title": "Python (programming language)",
+        "paragraph_text": "Python is a high-level, general-purpose programming language. Its design philosophy emphasizes code readability with the use of significant indentation. Python was created by Guido van Rossum and first released in 1991.",
+        "is_supporting": true
+      },
+      {
+        "title": "Guido van Rossum",
+        "paragraph_text": "Guido van Rossum is a Dutch programmer best known as the creator of the Python programming language. He attended the University of Amsterdam, where he received a master's degree in mathematics and computer science in 1982.",
+        "is_supporting": true
+      },
+      {
+        "title": "Oppenheimer (film)",
+        "paragraph_text": "Oppenheimer is a 2023 biographical drama film written and directed by Christopher Nolan. The film won seven Academy Awards at the 96th Oscars, including the prestigious Best Picture award.",
+        "is_supporting": false
+      }
+    ]
+  },
+  {
+    "question": "In which city is the university located where one of the co-authors of the Transformer architecture completed his PhD?",
+    "answer": "Los Angeles",
+    "paragraphs": [
+      {
+        "title": "Transformer (deep learning model)",
+        "paragraph_text": "The Transformer is a deep learning architecture introduced in 2017 by researchers at Google. The seminal paper Attention Is All You Need was co-authored by Ashish Vaswani, Noam Shazeer, Niki Parmar, and Jakob Uszkoreit.",
+        "is_supporting": true
+      },
+      {
+        "title": "Ashish Vaswani",
+        "paragraph_text": "Ashish Vaswani is a computer scientist known for his work in deep learning. He completed his PhD in Computer Science at the University of Southern California (USC) before joining Google Brain as a research scientist.",
+        "is_supporting": true
+      },
+      {
+        "title": "University of Southern California",
+        "paragraph_text": "The University of Southern California (USC) is a private research university in Los Angeles, California. Founded in 1880, it is the oldest private research university in California.",
+        "is_supporting": true
+      },
+      {
+        "title": "University of Amsterdam",
+        "paragraph_text": "The University of Amsterdam is a public research university located in Amsterdam, Netherlands. Established in 1632, it is the third-oldest university in the Netherlands.",
+        "is_supporting": false
+      }
+    ]
+  },
+  {
+    "question": "Who directed the movie that won the Academy Award for Best Picture in 2023?",
+    "answer": "Christopher Nolan",
+    "paragraphs": [
+      {
+        "title": "Oppenheimer (film)",
+        "paragraph_text": "Oppenheimer is a 2023 biographical drama film written and directed by Christopher Nolan. The film won seven Academy Awards at the 96th Oscars, including the prestigious Best Picture award.",
+        "is_supporting": true
+      },
+      {
+        "title": "Christopher Nolan",
+        "paragraph_text": "Christopher Nolan is a British-American filmmaker known for his Hollywood blockbusters with complex storytelling. He directed critically acclaimed films like Inception, Interstellar, and Oppenheimer.",
+        "is_supporting": true
+      },
+      {
+        "title": "Python (programming language)",
+        "paragraph_text": "Python is a high-level, general-purpose programming language. Its design philosophy emphasizes code readability with the use of significant indentation. Python was created by Guido van Rossum and first released in 1991.",
+        "is_supporting": false
       }
     ]
   }
