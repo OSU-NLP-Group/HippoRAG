@@ -1,18 +1,15 @@
 import os
 from typing import List
 import json
-
+import argparse
+import logging
 from src.hipporag.HippoRAG import HippoRAG
 from src.hipporag.utils.misc_utils import string_to_bool
 from src.hipporag.utils.config_utils import BaseConfig
 
-import argparse
-
 # os.environ["LOG_LEVEL"] = "DEBUG"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-import logging
 
 def get_gold_docs(samples: List, dataset_name: str = None) -> List:
     gold_docs = []
@@ -129,22 +126,15 @@ def main():
         openie_mode=args.openie_mode
     )
 
-    logging.getLogger().setLevel(logging.INFO)
-
+    logging.basicConfig(level=logging.INFO)
     hipporag = HippoRAG(global_config=config)
-
     hipporag.index(docs)
-
-    # Retrieval and QA
-    _, _, _, retrieval_metrics, qa_metrics = hipporag.rag_qa(
-        queries=all_queries, 
-        gold_docs=gold_docs, 
-        gold_answers=gold_answers
-    )
-
+    
+    res = hipporag.rag_qa(queries=all_queries, gold_docs=gold_docs, gold_answers=gold_answers)
+    
     print("\n" + "="*10 + " EVALUATION METRICS " + "="*10)
-    print("Retrieval Metrics:", retrieval_metrics)
-    print("QA Metrics:", qa_metrics)
+    print("Retrieval Metrics:", res[3] if len(res) == 5 else "N/A")
+    print("QA Metrics:", res[4] if len(res) == 5 else "N/A")
     print("="*40)
 
 if __name__ == "__main__":
