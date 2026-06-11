@@ -1,8 +1,8 @@
 # RFC: Optional Structured Relation Dynamics For HippoRAG Retrieval
 
-Status: internal draft only
+Status: upstream RFC draft
 
-No upstream issue or PR has been opened.
+Tracking issue: https://github.com/OSU-NLP-Group/HippoRAG/issues/181
 
 ## 1. Context & Motivation
 
@@ -148,7 +148,7 @@ If this is posted upstream, ask:
 
 ## 11. Next Step
 
-Do not open an upstream PR now.
+This RFC is staged as a docs-only upstream discussion artifact.
 
 Next steps:
 
