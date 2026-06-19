@@ -198,6 +198,37 @@ class BaseConfig:
         default=None,
         metadata={"help": "Directory to save all related information. If it's given, will overwrite all default save_dir setups. If it's not given, then if we're not running specific datasets, default to `outputs`, otherwise, default to a dataset-customized output dir."}
     )
+
+    # Vector store backend
+    vector_store_type: Literal["parquet", "qdrant", "chroma"] = field(
+        default="parquet",
+        metadata={"help": "Which embedding store backend to use. "
+                  "'parquet' (default) stores embeddings in local Parquet files. "
+                  "'qdrant' uses a Qdrant vector database (local file or remote). "
+                  "'chroma' uses a ChromaDB collection (local file or remote HTTP)."}
+    )
+
+    # Qdrant-specific settings (only used when vector_store_type='qdrant')
+    qdrant_url: Optional[str] = field(
+        default=None,
+        metadata={"help": "URL of a remote Qdrant server (e.g. 'http://localhost:6333'). "
+                  "If None, a local file-based Qdrant store is used inside save_dir."}
+    )
+    qdrant_api_key: Optional[str] = field(
+        default=None,
+        metadata={"help": "API key for Qdrant Cloud or a secured remote Qdrant instance."}
+    )
+
+    # ChromaDB-specific settings (only used when vector_store_type='chroma')
+    chroma_host: Optional[str] = field(
+        default=None,
+        metadata={"help": "Hostname of a remote ChromaDB HTTP server. "
+                  "If None, a local persistent ChromaDB store is used inside save_dir."}
+    )
+    chroma_port: int = field(
+        default=8000,
+        metadata={"help": "Port of the remote ChromaDB HTTP server."}
+    )
     
     
     

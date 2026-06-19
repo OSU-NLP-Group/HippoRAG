@@ -19,10 +19,11 @@ import time
 
 from .llm import _get_llm_class, BaseLLM
 from .embedding_model import _get_embedding_model_class, BaseEmbeddingModel
-from .embedding_store import EmbeddingStore
+from .embedding_store import EmbeddingStore, get_embedding_store
 from .information_extraction import OpenIE
-from .information_extraction.openie_vllm_offline import VLLMOfflineOpenIE
-from .information_extraction.openie_transformers_offline import TransformersOfflineOpenIE
+# VLLMOfflineOpenIE and TransformersOfflineOpenIE are imported lazily inside
+# __init__ so that vllm (Linux-only) and heavy Transformers deps are never
+# loaded unless the user explicitly requests offline OpenIE mode.
 from .evaluation.retrieval_eval import RetrievalRecall
 from .evaluation.qa_eval import QAExactMatch, QAF1Score
 from .prompts.linking import get_query_instruction
@@ -127,8 +128,10 @@ class HippoRAG:
         if self.global_config.openie_mode == 'online':
             self.openie = OpenIE(llm_model=self.llm_model)
         elif self.global_config.openie_mode == 'offline':
+            from .information_extraction.openie_vllm_offline import VLLMOfflineOpenIE
             self.openie = VLLMOfflineOpenIE(self.global_config)
-        elif self.global_config.openie_mode ==  'Transformers-offline':
+        elif self.global_config.openie_mode == 'Transformers-offline':
+            from .information_extraction.openie_transformers_offline import TransformersOfflineOpenIE
             self.openie = TransformersOfflineOpenIE(self.global_config)
 
         self.graph = self.initialize_graph()
@@ -139,15 +142,27 @@ class HippoRAG:
             self.embedding_model: BaseEmbeddingModel = _get_embedding_model_class(
                 embedding_model_name=self.global_config.embedding_model_name)(global_config=self.global_config,
                                                                               embedding_model_name=self.global_config.embedding_model_name)
-        self.chunk_embedding_store = EmbeddingStore(self.embedding_model,
-                                                    os.path.join(self.working_dir, "chunk_embeddings"),
-                                                    self.global_config.embedding_batch_size, 'chunk')
-        self.entity_embedding_store = EmbeddingStore(self.embedding_model,
-                                                     os.path.join(self.working_dir, "entity_embeddings"),
-                                                     self.global_config.embedding_batch_size, 'entity')
-        self.fact_embedding_store = EmbeddingStore(self.embedding_model,
-                                                   os.path.join(self.working_dir, "fact_embeddings"),
-                                                   self.global_config.embedding_batch_size, 'fact')
+        self.chunk_embedding_store = get_embedding_store(
+            self.embedding_model,
+            os.path.join(self.working_dir, "chunk_embeddings"),
+            self.global_config.embedding_batch_size,
+            'chunk',
+            self.global_config,
+        )
+        self.entity_embedding_store = get_embedding_store(
+            self.embedding_model,
+            os.path.join(self.working_dir, "entity_embeddings"),
+            self.global_config.embedding_batch_size,
+            'entity',
+            self.global_config,
+        )
+        self.fact_embedding_store = get_embedding_store(
+            self.embedding_model,
+            os.path.join(self.working_dir, "fact_embeddings"),
+            self.global_config.embedding_batch_size,
+            'fact',
+            self.global_config,
+        )
 
         self.prompt_template_manager = PromptTemplateManager(role_mapping={"system": "system", "user": "user", "assistant": "assistant"})
 
