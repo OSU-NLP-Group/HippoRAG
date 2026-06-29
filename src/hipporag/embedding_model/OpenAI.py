@@ -84,14 +84,16 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
         params = deepcopy(self.embedding_config.encode_params)
         if kwargs: params.update(kwargs)
 
-        if "instruction" in kwargs:
-            if kwargs["instruction"] != '':
-                params["instruction"] = f"Instruct: {kwargs['instruction']}\nQuery: "
-            # del params["instruction"]
-
+        instruction = ""
+        if "instruction" in kwargs and kwargs["instruction"] != '':
+            instruction = f"Instruct: {kwargs['instruction']}\nQuery: "
+            logger.info(f"Using instruction: {instruction}")
         logger.debug(f"Calling {self.__class__.__name__} with:\n{params}")
 
         batch_size = params.pop("batch_size", 16)
+
+        if instruction:
+            texts = [instruction + text for text in texts]
 
         if len(texts) <= batch_size:
             results = self.encode(texts)
