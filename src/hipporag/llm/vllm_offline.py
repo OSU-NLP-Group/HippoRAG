@@ -25,6 +25,8 @@ def convert_text_chat_messages_to_input_ids(messages: List[TextChatMessage], tok
     encoded = tokenizer(prompt, add_special_tokens=False)
     return encoded['input_ids']
 from vllm import SamplingParams, LLM
+from vllm.sampling_params import GuidedDecodingParams
+from vllm.inputs import TokensPrompt
 class VLLMOffline:
 
     def _init_llm_config(self) -> None:
@@ -65,7 +67,7 @@ class VLLMOffline:
         messages_list = [messages]
         prompt_ids = convert_text_chat_messages_to_input_ids(messages_list, self.tokenizer)
 
-        vllm_output = self.client.generate(prompt_token_ids=prompt_ids,  sampling_params=SamplingParams(max_tokens=max_tokens, temperature=0))
+        vllm_output = self.client.generate(TokensPrompt(prompt_token_ids=prompt_ids),  sampling_params=SamplingParams(max_tokens=max_tokens, temperature=0))
         response = vllm_output[0].outputs[0].text
         prompt_tokens = len(vllm_output[0].prompt_token_ids)
         completion_tokens = len(vllm_output[0].outputs[0].token_ids )
@@ -81,13 +83,11 @@ class VLLMOffline:
 
         guided = None
         if json_template is not None:
-            from vllm.model_executor.guided_decoding.guided_fields import GuidedDecodingRequest
-            guided = GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE[json_template])
+            guided = GuidedDecodingParams(json=PROMPT_JSON_TEMPLATE[json_template])
 
         all_prompt_ids = [convert_text_chat_messages_to_input_ids(messages, self.tokenizer) for messages in messages_list]
-        vllm_output = self.client.generate(prompt_token_ids=all_prompt_ids,
-                                           sampling_params=SamplingParams(max_tokens=max_tokens, temperature=0),
-                                           guided_options_request=guided)
+        vllm_output = self.client.generate(prompts=[TokensPrompt(prompt_token_ids=ids) for ids in all_prompt_ids],
+                                           sampling_params=SamplingParams(max_tokens=max_tokens, temperature=0, guided_decoding=guided))
 
         all_responses = [completion.outputs[0].text for completion in vllm_output]
         all_prompt_tokens = [len(completion.prompt_token_ids) for completion in vllm_output]

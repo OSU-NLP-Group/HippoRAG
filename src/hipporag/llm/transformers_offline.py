@@ -1,7 +1,6 @@
 from typing import Tuple, List
 import torch.cuda
-import outlines.generate as generate
-import outlines.models as models
+import outlines
 import json
 
 from .base import BaseLLM, LLMConfig
@@ -71,19 +70,19 @@ class TransformersOffline:
 
         guided = None
         if json_template is not None:
-            guided_json=get_pydantic_model(json_template)
-            outlines_model = models.Transformers(self.model, self.tokenizer)
-            generator = generate.json(outlines_model, guided_json)
+            guided_schema = get_pydantic_model(json_template)
+            outlines_model = outlines.from_transformers(self.model, self.tokenizer)
+            generator = outlines.Generator(outlines_model, output_type=guided_schema)
             transformers_outputs = []
             for i in range(0, len(all_prompt_texts), 4):
-                transformers_output = generator(all_prompt_texts[i:i+4], max_tokens=max_tokens)
+                transformers_output = generator.batch(all_prompt_texts[i:i+4], max_new_tokens=max_tokens)
                 transformers_outputs.extend(transformers_output)
         else:
             transformers_outputs = []
             for i in range(0, len(all_prompt_texts), 4):
-                transformers_output = self.model.generate(all_prompt_texts[i:i+4], max_tokens=max_tokens)
+                transformers_output = self.model.generate(all_prompt_texts[i:i+4], max_new_tokens=max_tokens)
                 transformers_outputs.extend(transformers_output)
-        all_responses = [completion.model_dump_json() for completion in transformers_outputs]
+        all_responses = [completion if isinstance(completion, str) else completion.model_dump_json() for completion in transformers_outputs]
         all_prompt_tokens = [len(self.tokenizer.encode(prompt)) for prompt in all_prompt_texts]
         all_completion_tokens = [len(self.tokenizer.encode(response)) for response in all_responses]
 
