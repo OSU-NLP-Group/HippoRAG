@@ -19,7 +19,7 @@ setuptools.setup(
         "torch==2.5.1",
         "transformers==4.45.2",
         "vllm==0.6.6.post1",
-        "openai==1.91.1",
+        "openai>=1.91.0",
         "litellm==1.73.1",
         "gritlm==1.0.2",
         "networkx==3.4.2",
