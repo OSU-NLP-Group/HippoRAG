@@ -27,7 +27,7 @@ def main():
     ]
 
     save_dir = 'outputs/local_test'  # Define save directory for HippoRAG objects (each LLM/Embedding model combination will create a new subdirectory)
-    llm_model_name = 'Transformers/Qwen/Qwen2.5-7B-Instruct'  # Any OpenAI model name
+    llm_model_name = 'Transformers/Qwen/Qwen3-1.7B'  # Any OpenAI model name
     embedding_model_name = 'Transformers/BAAI/bge-m3'  # Embedding model name (NV-Embed, GritLM or Contriever for now)
 
     global_config = BaseConfig(

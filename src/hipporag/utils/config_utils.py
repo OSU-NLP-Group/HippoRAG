@@ -23,6 +23,13 @@ class BaseConfig:
         default=None,
         metadata={"help": "Base URL for the LLM model, if none, means using OPENAI service."}
     )
+    llm_mode: Optional[str] = field(
+        default=None,
+        metadata={"help": "Identifier of the LLM backend mode (e.g. 'openai', 'ollama') as requested by "
+                  "external pipelines such as GraphRAG-Benchmark. HippoRAG itself dispatches the LLM "
+                  "purely on llm_name/llm_base_url, so this field is informational and does not change "
+                  "internal behavior."}
+    )
     embedding_base_url: str = field(
         default=None,
         metadata={"help": "Base URL for an OpenAI compatible embedding model, if none, means using OPENAI service."}
@@ -140,6 +147,13 @@ class BaseConfig:
     embedding_model_dtype: Literal["float16", "float32", "bfloat16", "auto"] = field(
         default="auto",
         metadata={"help": "Data type for local embedding model."}
+    )
+    embedding_dim: Optional[int] = field(
+        default=None,
+        metadata={"help": "Optional explicit embedding dimensionality. Local embedding models derive "
+                  "this from the model config, and the OpenAI embedding model derives it from the API "
+                  "response, so this field is informational (used by external pipelines such as "
+                  "GraphRAG-Benchmark) and does not override the detected dimension."}
     )
     
     
