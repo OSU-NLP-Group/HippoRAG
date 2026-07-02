@@ -14,6 +14,8 @@ setuptools.setup(
     url="https://github.com/OSU-NLP-Group/HippoRAG",
     package_dir={"": "src"},
     packages=setuptools.find_packages("src"),
+    include_package_data=True,
+    package_data={"hipporag": ["prompts/dspy_prompts/*.json"]},
     python_requires=">=3.10",
     install_requires=[
         "openai>=2.0",
