@@ -64,7 +64,7 @@ When adding a model, update the relevant `__init__.py` getter; there is no regis
 
 `openie_mode='offline'` is **intentionally a dead end** for a single run: `HippoRAG.pre_openie` dumps OpenIE results to disk and then `assert False`s with the message "run online indexing for future retrieval." The intended flow (documented in README §"Run with vLLM offline batch"):
 
-1. `python main.py ... --openie_mode offline --skip_graph` → writes `openie_results_ner_*.json`, then stops.
+1. `python main.py ... --openie_mode offline --skip_graph` → writes `openie_results_ner.json`, then stops.
 2. Re-run the same command in `online` mode (or against a running vLLM server); it loads the cached OpenIE file via `force_openie_from_scratch=False` and builds the graph.
 
 Do not "fix" the `assert False` in `pre_openie` — it is by design.
@@ -81,21 +81,22 @@ Every backend subclasses `BaseEmbeddingStore` and **must** keep `text_to_hash_id
 
 ## Outputs layout & caching
 
-`outputs/` is gitignored. For a given run, artifacts land in:
+`outputs/` is gitignored. The working directory **equals** `save_dir` (flat layout): the caller is responsible for picking a distinct `save_dir` per experiment, matching the convention used by the other frameworks in GraphRAG-Benchmark. The index location no longer depends on the LLM/embedding model names, so an index built with one model can be queried with another. Artifacts land in:
 
 ```
-{save_dir}/{llm_name}_{embedding_name}/   # '/' in model names → '_'
+{save_dir}/
   ├── chunk_embeddings/vdb_chunk.parquet
   ├── entity_embeddings/vdb_entity.parquet
   ├── fact_embeddings/vdb_fact.parquet
-  └── graph.pickle
-{save_dir}/openie_results_ner_{llm_name}.json   # NB: one level up from the per-model dir
+  ├── graph.pickle
+  ├── openie_results_ner.json
+  └── llm_cache/{llm_name}_cache.sqlite   # LLM response cache, still keyed by model name
 ```
 
 Reuse is controlled by two `BaseConfig` flags:
 
 - `force_index_from_scratch` — ignore existing `graph.pickle` / stores and rebuild.
-- `force_openie_from_scratch` — ignore existing `openie_results_ner_*.json` and re-extract.
+- `force_openie_from_scratch` — ignore existing `openie_results_ner.json` and re-extract.
 
 When re-running an experiment you typically must **delete** the cached files first (see README §"Debugging Note"). `embedding_model` is set to `None` while `openie_mode='offline'`, so embedding-dependent code paths are not usable in pure offline mode.
 

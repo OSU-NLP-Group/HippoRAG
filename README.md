@@ -77,7 +77,7 @@ docs = [
     "Montebello is a part of Rockland County."
 ]
 
-save_dir = 'outputs'# Define save directory for HippoRAG objects (each LLM/Embedding model combination will create a new subdirectory)
+save_dir = 'outputs'# Define save directory for HippoRAG objects (one flat directory per experiment; pick a distinct save_dir per run, the layout no longer depends on the model names)
 llm_model_name = 'gpt-4o-mini' # Any OpenAI model name
 embedding_model_name = 'nvidia/NV-Embed-v2'# Embedding model name (NV-Embed, GritLM or Contriever for now)
 
@@ -155,7 +155,7 @@ vllm serve meta-llama/Llama-3.3-70B-Instruct --tensor-parallel-size 2 --max_mode
 2. Now you can use very similar code to the one above to use `hipporag`: 
 
 ```python
-save_dir = 'outputs'# Define save directory for HippoRAG objects (each LLM/Embedding model combination will create a new subdirectory)
+save_dir = 'outputs'# Define save directory for HippoRAG objects (one flat directory per experiment; pick a distinct save_dir per run, the layout no longer depends on the model names)
 llm_model_name = # Any OpenAI model name
 embedding_model_name = # Embedding model name (NV-Embed, GritLM or Contriever for now)
 llm_base_url= # Base url for your deployed LLM (i.e. http://localhost:8000/v1)
@@ -290,8 +290,7 @@ python main.py --dataset $dataset --llm_name meta-llama/Llama-3.3-70B-Instruct -
 - If you want to rerun a particular experiment, remember to clear the saved files, including OpenIE results and knowledge graph, e.g.,
 
 ```sh
-rm reproduce/dataset/openie_results/openie_sample_results_ner_meta-llama_Llama-3.3-70B-Instruct_3.json
-rm -rf outputs/sample/sample_meta-llama_Llama-3.3-70B-Instruct_nvidia_NV-Embed-v2
+rm -rf outputs/sample   # flat layout: graph.pickle, embedding stores, and openie_results_ner.json all live directly under save_dir
 ```
 ### Custom Datasets
 

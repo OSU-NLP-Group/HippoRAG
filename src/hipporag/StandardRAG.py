@@ -73,10 +73,10 @@ class StandardRAG:
         _print_config = ",\n  ".join([f"{k} = {v}" for k, v in asdict(self.global_config).items()])
         logger.debug(f"HippoRAG init with config:\n  {_print_config}\n")
 
-        #LLM and embedding model specific working directories are created under every specified saving directories
-        llm_label = self.global_config.llm_name.replace("/", "_")
-        embedding_label = self.global_config.embedding_model_name.replace("/", "_")
-        self.working_dir = os.path.join(self.global_config.save_dir, f"{llm_label}_{embedding_label}")
+        # Flat working directory: the caller-provided save_dir IS the working dir.
+        # Experiment isolation is the caller's responsibility (a distinct save_dir per
+        # run), matching the convention used by the other frameworks in GraphRAG-Benchmark.
+        self.working_dir = self.global_config.save_dir
 
         if not os.path.exists(self.working_dir):
             logger.info(f"Creating working directory: {self.working_dir}")
