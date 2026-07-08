@@ -168,6 +168,57 @@ hipporag = HippoRAG(save_dir=save_dir,
 # Same Indexing, Retrieval and QA as running OpenAI models above
 ```
 
+## Vector Store Backends
+
+HippoRAG stores embeddings in local Parquet files by default. It can also use
+Qdrant, ChromaDB, or Milvus through `BaseConfig.vector_store_type`.
+
+### Milvus
+
+Install the optional Milvus dependency when you want to use this backend:
+
+```sh
+pip install "hipporag[milvus]"
+```
+
+For a source checkout, install the optional extra from the repository root:
+
+```sh
+pip install -e ".[milvus]"
+```
+
+Milvus Lite is used by default and stores its local database inside the
+HippoRAG working directory, so no separate server is required:
+
+```python
+from hipporag import HippoRAG
+from hipporag.utils.config_utils import BaseConfig
+
+config = BaseConfig(vector_store_type="milvus")
+
+hipporag = HippoRAG(
+    global_config=config,
+    save_dir=save_dir,
+    llm_model_name=llm_model_name,
+    embedding_model_name=embedding_model_name,
+)
+```
+
+To connect to Milvus server or Zilliz Cloud, set `milvus_uri` and
+`milvus_token` directly or use `MILVUS_URI` and `MILVUS_TOKEN` environment
+variables. `MILVUS_DB_NAME` and `MILVUS_CONSISTENCY_LEVEL` are also honored
+when set:
+
+```python
+config = BaseConfig(
+    vector_store_type="milvus",
+    milvus_uri="http://localhost:19530",
+    milvus_token=None,
+    milvus_db_name=None,
+    milvus_consistency_level="Session",
+)
+```
+
 ## Testing
 
 When making a contribution to HippoRAG, please run the scripts below to ensure that your changes do not result in unexpected behavior from our core modules. 
