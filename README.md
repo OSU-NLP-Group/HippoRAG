@@ -71,6 +71,12 @@ uv pip install -e .
 
 The complete runnable version is [`examples/demo_openai.py`](examples/demo_openai.py). A minimal workflow is:
 
+Set `OPENAI_API_KEY` before using OpenAI models:
+
+```sh
+export OPENAI_API_KEY=<your OpenAI API key>
+```
+
 ```python
 from hipporag import HippoRAG
 
@@ -84,6 +90,12 @@ results = hipporag.rag_qa(queries=queries)
 #### OpenAI-compatible endpoints
 
 Pass custom base URLs for OpenAI-compatible LLM and embedding servers:
+
+```sh
+export OPENAI_API_KEY=<the API key required by your endpoint>
+```
+
+For endpoints that do not require authentication, set this to a non-empty placeholder. HippoRAG automatically supplies a placeholder only when the configured LLM URL contains `localhost`.
 
 ```python
 hipporag = HippoRAG(
@@ -124,6 +136,8 @@ The Mantle endpoint and model availability are region-specific. HippoRAG require
 This simple example will illustrate how to use `hipporag` with any vLLM-compatible locally deployed LLM.
 
 1. Run a local [OpenAI-compatible vLLM server](https://docs.vllm.ai/en/latest/getting_started/quickstart.html#quickstart-online) with specified GPUs (make sure you leave enough memory for your embedding model).
+
+Keep `VLLM_WORKER_MULTIPROC_METHOD=spawn` when running vLLM with multiple GPUs; it makes the required multiprocessing mode explicit and avoids CUDA initialization problems with forked workers.
 
 ```sh
 export CUDA_VISIBLE_DEVICES=0,1
@@ -258,6 +272,7 @@ python main.py --dataset $dataset --llm_base_url https://api.openai.com/v1 --llm
 Azure OpenAI uses the same entry point:
 
 ```sh
+export AZURE_OPENAI_API_KEY=<your Azure OpenAI API key>
 python main.py --dataset sample --embedding_name text-embedding-3-small --azure_endpoint <chat-completions-url> --azure_embedding_endpoint <embeddings-url>
 ```
 
@@ -270,6 +285,8 @@ python main.py --dataset sample --rag_type standard --embedding_batch_size 1
 ### Run with vLLM (Llama)
 
 1. As above, run a local [OpenAI-compatible vLLM server](https://docs.vllm.ai/en/latest/getting_started/quickstart.html#quickstart-online) with specified GPU.
+
+Do not omit `VLLM_WORKER_MULTIPROC_METHOD=spawn` when using multiple GPUs.
 
 ```sh
 export CUDA_VISIBLE_DEVICES=0,1
@@ -295,6 +312,8 @@ python main.py --dataset $dataset --llm_base_url http://localhost:8000/v1 --llm_
 #### Advanced: vLLM offline batch
 
 vLLM offers an [offline batch mode](https://docs.vllm.ai/en/latest/getting_started/quickstart.html#offline-batched-inference) for faster inference, which could bring us more than 3x faster indexing compared to vLLM online server. 
+
+The offline implementation also sets `VLLM_WORKER_MULTIPROC_METHOD=spawn` internally, and the export below documents the required multiprocessing mode explicitly.
 
 1. Use the following command to run the main program with vLLM offline batch mode.
 

@@ -100,12 +100,8 @@ def main():
         rerank_dspy_file_path="src/hipporag/prompts/dspy_prompts/filter_llama3.3-70B-Instruct.json",
         retrieval_top_k=200,
         linking_top_k=5,
-        max_qa_steps=3,
         qa_top_k=5,
-        graph_type="facts_and_sim_passage_node_unidirectional",
         embedding_batch_size=args.embedding_batch_size,
-        max_new_tokens=None,
-        corpus_len=len(corpus),
         openie_mode=args.openie_mode,
     )
     logging.basicConfig(level=logging.INFO)

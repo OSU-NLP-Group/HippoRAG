@@ -229,7 +229,7 @@ class HippoRAG:
         if self.global_config.save_openie:
             self.save_openie_results(all_openie_info)
 
-        assert False, logger.info('Done with OpenIE, run online indexing for future retrieval.')
+        raise RuntimeError("Offline OpenIE completed. Run indexing again with openie_mode='online' to build the graph.")
 
     def index(self, docs: List[str]):
         """

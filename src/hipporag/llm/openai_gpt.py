@@ -114,10 +114,8 @@ class CacheOpenAI(BaseLLM):
     """OpenAI LLM implementation."""
     @classmethod
     def from_experiment_config(cls, global_config: BaseConfig) -> "CacheOpenAI":
-        config_dict = global_config.__dict__
-        config_dict['max_retries'] = global_config.max_retry_attempts
         cache_dir = os.path.join(global_config.save_dir, "llm_cache")
-        return cls(cache_dir=cache_dir, global_config=global_config)
+        return cls(cache_dir=cache_dir, global_config=global_config, max_retries=global_config.max_retry_attempts)
 
     def __init__(self, cache_dir, global_config, cache_filename: str = None,
                  high_throughput: bool = True,
@@ -195,5 +193,4 @@ class CacheOpenAI(BaseLLM):
         }
 
         return response_message, metadata
-
 

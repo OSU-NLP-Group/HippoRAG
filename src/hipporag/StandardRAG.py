@@ -84,12 +84,10 @@ class StandardRAG:
 
         self.llm_model: BaseLLM = _get_llm_class(self.global_config)
 
-        if self.global_config.openie_mode == 'offline':
-            self.embedding_model = None
-        else:
-            self.embedding_model: BaseEmbeddingModel = _get_embedding_model_class(
-                embedding_model_name=self.global_config.embedding_model_name)(global_config=self.global_config,
-                                                                              embedding_model_name=self.global_config.embedding_model_name)
+        # StandardRAG does not run OpenIE and always needs passage embeddings.
+        self.embedding_model: BaseEmbeddingModel = _get_embedding_model_class(
+            embedding_model_name=self.global_config.embedding_model_name)(global_config=self.global_config,
+                                                                          embedding_model_name=self.global_config.embedding_model_name)
 
         self.chunk_embedding_store = get_embedding_store(
             self.embedding_model,
@@ -256,7 +254,7 @@ class StandardRAG:
             if gold_docs is not None:
                 queries, overall_retrieval_result = self.retrieve(queries=queries, gold_docs=gold_docs)
             else:
-                queries = self.retrieve_dpr(queries=queries)
+                queries = self.retrieve(queries=queries)
 
         # Performing QA
         queries_solutions, all_response_message, all_metadata = self.qa(queries)
