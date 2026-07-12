@@ -39,10 +39,11 @@ class QuerySolution:
     answer: str = None
     gold_answers: List[str] = None
     gold_docs: Optional[List[str]] = None
+    thoughts: Optional[List[str]] = None
 
 
     def to_dict(self):
-        return {
+        result = {
             "question": self.question,
             "answer": self.answer,
             "gold_answers": self.gold_answers,
@@ -50,6 +51,9 @@ class QuerySolution:
             "doc_scores": [round(v, 4) for v in self.doc_scores.tolist()[:5]]  if self.doc_scores is not None else None,
             "gold_docs": self.gold_docs,
         }
+        if self.thoughts is not None:
+            result["thoughts"] = self.thoughts
+        return result
 
 def text_processing(text):
     if isinstance(text, list):

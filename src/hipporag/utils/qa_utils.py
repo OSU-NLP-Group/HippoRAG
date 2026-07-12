@@ -1,9 +1,6 @@
-from typing import Dict, List, Union, Any, Optional
-
-
 from ..prompts.prompt_template_manager import PromptTemplateManager
 from .logging_utils import get_logger
-from ..llm.openai_gpt import CacheOpenAI
+from ..llm import BaseLLM
 
 logger = get_logger(__name__)
 
@@ -31,7 +28,7 @@ def merge_elements_with_same_first_line(elements, prefix='Wikipedia Title: '):
     return merged_elements
 
 
-def reason_step(dataset, prompt_template_manager: PromptTemplateManager, query: str, passages: list, thoughts: list, llm_client: CacheOpenAI):
+def reason_step(dataset: str, prompt_template_manager: PromptTemplateManager, query: str, passages: list, thoughts: list, llm_client: BaseLLM) -> str:
     """
     Given few-shot samples, query, previous retrieved passages, and previous thoughts, generate the next thought with OpenAI models. The generated thought is used for further retrieval step.
     :return: next thought
@@ -47,11 +44,7 @@ def reason_step(dataset, prompt_template_manager: PromptTemplateManager, query: 
     
     messages = prompt_template_manager.render(name=f'ircot_{dataset}', prompt_user=prompt_user)
 
-    try:
-        response_message, metadata = llm_client.infer(messages=messages)
-        response_content = response_message[0]["content"]
-    except Exception as e:
-        logger.exception("An exception occurred while calling LLM for QA!")
-        return ''
-    
+    response_content = llm_client.infer(messages)[0]
+    if not isinstance(response_content, str):
+        raise TypeError(f"IRCoT reasoning expected a string response, got {type(response_content).__name__}.")
     return response_content

@@ -35,6 +35,7 @@ from .utils.embed_utils import retrieve_knn
 from .utils.typing import Triple
 from .utils.config_utils import BaseConfig
 from .utils.state_utils import remove_sources_from_mapping
+from .utils.qa_utils import reason_step
 
 logger = logging.getLogger(__name__)
 
@@ -458,6 +459,85 @@ class HippoRAG:
             return retrieval_results, overall_retrieval_result
         else:
             return retrieval_results
+
+    def retrieve_ircot(self,
+                       queries: List[str],
+                       max_qa_steps: int,
+                       num_to_retrieve: int = None,
+                       gold_docs: List[List[str]] = None) -> List[QuerySolution] | Tuple[List[QuerySolution], Dict]:
+        """Retrieve documents iteratively by alternating HippoRAG 2 retrieval and one-step reasoning."""
+        if max_qa_steps < 1:
+            raise ValueError("max_qa_steps must be at least 1.")
+        if num_to_retrieve is None:
+            num_to_retrieve = self.global_config.retrieval_top_k
+
+        prompt_name = f'ircot_{self.global_config.dataset}'
+        if max_qa_steps > 1 and not self.prompt_template_manager.is_template_name_valid(prompt_name):
+            raise ValueError(f"IRCoT prompt template '{prompt_name}' is not available.")
+
+        retrieval_results = []
+        for query in tqdm(queries, desc="IRCoT retrieval"):
+            step_result = self.retrieve([query], num_to_retrieve=num_to_retrieve)[0]
+            merged_doc_scores = dict(zip(step_result.docs, step_result.doc_scores.tolist()))
+            thoughts = []
+
+            for _ in range(1, max_qa_steps):
+                ranked_docs = sorted(merged_doc_scores, key=merged_doc_scores.get, reverse=True)
+                thought = reason_step(self.global_config.dataset, self.prompt_template_manager, query,
+                                      ranked_docs[:num_to_retrieve], thoughts, self.llm_model)
+                thoughts.append(thought)
+                if 'So the answer is:' in thought:
+                    break
+
+                step_result = self.retrieve([thought], num_to_retrieve=num_to_retrieve)[0]
+                for doc, score in zip(step_result.docs, step_result.doc_scores.tolist()):
+                    merged_doc_scores[doc] = max(merged_doc_scores.get(doc, float('-inf')), score)
+
+            ranked_items = sorted(merged_doc_scores.items(), key=lambda item: item[1], reverse=True)
+            retrieval_results.append(QuerySolution(question=query,
+                                                   docs=[doc for doc, _ in ranked_items],
+                                                   doc_scores=np.asarray([score for _, score in ranked_items]),
+                                                   thoughts=thoughts))
+
+        if gold_docs is None:
+            return retrieval_results
+
+        retrieval_recall_evaluator = RetrievalRecall(global_config=self.global_config)
+        k_list = [1, 2, 5, 10, 20, 30, 50, 100, 150, 200]
+        overall_retrieval_result, _ = retrieval_recall_evaluator.calculate_metric_scores(
+            gold_docs=gold_docs, retrieved_docs=[result.docs for result in retrieval_results], k_list=k_list)
+        return retrieval_results, overall_retrieval_result
+
+    def answer_with_ircot(self,
+                          queries: List[str],
+                          max_qa_steps: int,
+                          gold_docs: List[List[str]] = None,
+                          gold_answers: List[List[str]] = None):
+        """Run QA with optional IRCoT retrieval while leaving the default rag_qa path unchanged."""
+        if gold_docs is None:
+            query_solutions = self.retrieve_ircot(queries, max_qa_steps=max_qa_steps)
+            overall_retrieval_result = None
+        else:
+            query_solutions, overall_retrieval_result = self.retrieve_ircot(
+                queries, max_qa_steps=max_qa_steps, gold_docs=gold_docs)
+
+        query_solutions, all_response_message, all_metadata = self.qa(query_solutions)
+        if gold_answers is None:
+            return query_solutions, all_response_message, all_metadata
+
+        qa_em_evaluator = QAExactMatch(global_config=self.global_config)
+        qa_f1_evaluator = QAF1Score(global_config=self.global_config)
+        overall_qa_results, _ = qa_em_evaluator.calculate_metric_scores(
+            gold_answers=gold_answers, predicted_answers=[result.answer for result in query_solutions], aggregation_fn=np.max)
+        overall_qa_f1_result, _ = qa_f1_evaluator.calculate_metric_scores(
+            gold_answers=gold_answers, predicted_answers=[result.answer for result in query_solutions], aggregation_fn=np.max)
+        overall_qa_results.update(overall_qa_f1_result)
+        overall_qa_results = {key: round(float(value), 4) for key, value in overall_qa_results.items()}
+        for idx, result in enumerate(query_solutions):
+            result.gold_answers = list(gold_answers[idx])
+            if gold_docs is not None:
+                result.gold_docs = gold_docs[idx]
+        return query_solutions, all_response_message, all_metadata, overall_retrieval_result, overall_qa_results
 
     def rag_qa(self,
                queries: List[str|QuerySolution],
