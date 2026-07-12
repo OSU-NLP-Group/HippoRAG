@@ -10,7 +10,7 @@
 [<img align="center" src="https://img.shields.io/badge/arXiv-2405.14831 HippoRAG 1-b31b1b" />](https://arxiv.org/abs/2405.14831)
 [<img align="center" src="https://img.shields.io/badge/GitHub-HippoRAG 1-blue" />](https://github.com/OSU-NLP-Group/HippoRAG/tree/legacy)
 
-### HippoRAG 2 is a powerful memory framework for LLMs that enhances their ability to recognize and utilize connections in new knowledge—mirroring a key function of human long-term memory.
+HippoRAG 2 is a memory framework for LLMs that recognizes and uses connections in new knowledge, mirroring a key function of human long-term memory.
 
 Our experiments show that HippoRAG 2 improves associativity (multi-hop retrieval) and sense-making (the process of integrating large and complex contexts) in even the most advanced RAG systems, without sacrificing their performance on simpler tasks.
 
@@ -31,7 +31,7 @@ categories, bringing it one step closer to true long-term memory.
   <b>Figure 2:</b> HippoRAG 2 methodology.
 </p>
 
-#### Check out our papers to learn more:
+### Papers
 
 * [**HippoRAG: Neurobiologically Inspired Long-Term Memory for Large Language Models**](https://arxiv.org/abs/2405.14831) [NeurIPS '24].
 * [**From RAG to Memory: Non-Parametric Continual Learning for Large Language Models**](https://arxiv.org/abs/2502.14802) [ICML '25].
@@ -40,12 +40,14 @@ categories, bringing it one step closer to true long-term memory.
 
 ## Installation
 
+Use Conda or `uv` to create a Python 3.10 environment. A project-local `.venv` is recommended for development.
+
 ```sh
 conda create -n hipporag python=3.10
 conda activate hipporag
 pip install hipporag
 ```
-Initialize the environmental variables and activate the environment:
+Set only the environment variables required by the models you use:
 
 ```sh
 export CUDA_VISIBLE_DEVICES=0,1,2,3
@@ -55,85 +57,67 @@ export OPENAI_API_KEY=<your openai api key>   # if you want to use OpenAI model
 conda activate hipporag
 ```
 
+For a project-local environment managed by `uv`:
+
+```sh
+uv venv --python 3.10 .venv
+source .venv/bin/activate
+uv pip install -e .
+```
+
 ## Quick Start
 
-### OpenAI Models
+### OpenAI
 
-This simple example will illustrate how to use `hipporag` with any OpenAI model:
+The complete runnable version is [`examples/demo_openai.py`](examples/demo_openai.py). A minimal workflow is:
 
 ```python
 from hipporag import HippoRAG
 
-# Prepare datasets and evaluation
-docs = [
-    "Oliver Badman is a politician.",
-    "George Rankin is a politician.",
-    "Thomas Marwick is a politician.",
-    "Cinderella attended the royal ball.",
-    "The prince used the lost glass slipper to search the kingdom.",
-    "When the slipper fit perfectly, Cinderella was reunited with the prince.",
-    "Erik Hort's birthplace is Montebello.",
-    "Marina is bom in Minsk.",
-    "Montebello is a part of Rockland County."
-]
-
-save_dir = 'outputs'# Define save directory for HippoRAG objects (each LLM/Embedding model combination will create a new subdirectory)
-llm_model_name = 'gpt-4o-mini' # Any OpenAI model name
-embedding_model_name = 'nvidia/NV-Embed-v2'# Embedding model name (NV-Embed, GritLM or Contriever for now)
-
-#Startup a HippoRAG instance
-hipporag = HippoRAG(save_dir=save_dir, 
-                    llm_model_name=llm_model_name,
-                    embedding_model_name=embedding_model_name) 
-
-#Run indexing
+docs = ["George Rankin is a politician."]
+queries = ["What is George Rankin's occupation?"]
+hipporag = HippoRAG(save_dir="outputs", llm_model_name="gpt-4o-mini", embedding_model_name="text-embedding-3-small")
 hipporag.index(docs=docs)
-
-#Separate Retrieval & QA
-queries = [
-    "What is George Rankin's occupation?",
-    "How did Cinderella reach her happy ending?",
-    "What county is Erik Hort's birthplace a part of?"
-]
-
-retrieval_results = hipporag.retrieve(queries=queries, num_to_retrieve=2)
-qa_results = hipporag.rag_qa(retrieval_results)
-
-#Combined Retrieval & QA
-rag_results = hipporag.rag_qa(queries=queries)
-
-#For Evaluation
-answers = [
-    ["Politician"],
-    ["By going to the ball."],
-    ["Rockland County"]
-]
-
-gold_docs = [
-    ["George Rankin is a politician."],
-    ["Cinderella attended the royal ball.",
-    "The prince used the lost glass slipper to search the kingdom.",
-    "When the slipper fit perfectly, Cinderella was reunited with the prince."],
-    ["Erik Hort's birthplace is Montebello.",
-    "Montebello is a part of Rockland County."]
-]
-
-rag_results = hipporag.rag_qa(queries=queries, 
-                              gold_docs=gold_docs,
-                              gold_answers=answers)
+results = hipporag.rag_qa(queries=queries)
 ```
 
-#### Example (OpenAI Compatible Embeddings)
+#### OpenAI-compatible endpoints
 
-If you want to use LLMs and Embeddings Compatible to OpenAI, please use the following methods.</p>
-    
+Pass custom base URLs for OpenAI-compatible LLM and embedding servers:
+
 ```python
-hipporag = HippoRAG(save_dir=save_dir, 
-    llm_model_name='Your LLM Model name',
-    llm_base_url='Your LLM Model url',
-    embedding_model_name='Your Embedding model name',  
-    embedding_base_url='Your Embedding model url')
+hipporag = HippoRAG(
+    save_dir=save_dir,
+    llm_model_name="your-llm",
+    llm_base_url="http://localhost:8000/v1",
+    embedding_model_name="your-embedding-model",
+    embedding_base_url="http://localhost:8001/v1/embeddings",
+)
 ```
+
+### Amazon Bedrock
+
+Models available through the standard Bedrock Runtime endpoint use the existing LiteLLM route. Prefix the Bedrock model ID with `bedrock/`, as shown in `examples/demo_bedrock.py`.
+
+OpenAI models such as GPT-5.5 use Amazon Bedrock Mantle and its Responses API instead. Create a Bedrock API key, then run:
+
+```sh
+export AWS_BEARER_TOKEN_BEDROCK=<your Bedrock API key>
+python examples/demo_bedrock_mantle.py
+```
+
+The corresponding configuration is:
+
+```python
+hipporag = HippoRAG(
+    save_dir='outputs/bedrock-mantle',
+    llm_model_name='bedrock-mantle/openai.gpt-5.5',
+    llm_base_url='https://bedrock-mantle.us-east-2.api.aws/openai/v1',
+    embedding_model_name=embedding_model_name,
+)
+```
+
+The Mantle endpoint and model availability are region-specific. HippoRAG requires an explicit endpoint and raises an error if the Bedrock API key is missing. To use an existing AWS profile instead, construct a `BaseConfig` with `bedrock_mantle_auth='aws_credentials'`, `bedrock_aws_profile='<profile>'`, and `bedrock_region='<region>'`; this explicitly enables SigV4 authentication. Mantle response storage is disabled by default (`store=False`); pass `store=True` to `infer` only when server-side conversation state is required.
 
 ### Local Deployment (vLLM)
 
@@ -221,43 +205,23 @@ config = BaseConfig(
 
 ## Testing
 
-When making a contribution to HippoRAG, please run the scripts below to ensure that your changes do not result in unexpected behavior from our core modules. 
-
-These scripts test for indexing, graph loading, document deletion and incremental updates to a HippoRAG object.
-
-### OpenAI Test
-
-To test HippoRAG with an OpenAI LLM and embedding model, simply run the following. 
-The cost of this test will be negligible.
+Run the offline unit tests before submitting changes:
 
 ```sh
-export OPENAI_API_KEY=<your openai api key> 
-
-conda activate hipporag
-
-python tests_openai.py
+python -m unittest discover -s tests -p 'test_*.py'
+python tests/integration/run_vector_stores.py
 ```
 
-### Local Test
+Provider integration scripts exercise indexing, graph reload, incremental updates, and deletion. They require the corresponding API or local model service:
 
-To test locally, you must deploy a vLLM instance. We choose to deploy a smaller 8B model `Llama-3.1-8B-Instruct` for cheaper testing.
+| Provider | Command |
+| --- | --- |
+| OpenAI | `python tests/integration/run_openai.py` |
+| Azure OpenAI | `python tests/integration/run_azure.py --azure_endpoint <url> --azure_embedding_endpoint <url>` |
+| Local vLLM | `python tests/integration/run_local.py` |
+| Transformers | `python tests/integration/run_transformers.py` |
 
-```sh
-export CUDA_VISIBLE_DEVICES=0
-export VLLM_WORKER_MULTIPROC_METHOD=spawn
-export HF_HOME=<path to Huggingface home directory>
-
-conda activate hipporag  # vllm should be in this environment
-
-# Tune gpu-memory-utilization or max_model_len to fit your GPU memory, if OOM occurs
-vllm serve meta-llama/Llama-3.1-8B-Instruct --tensor-parallel-size 2 --max_model_len 4096 --gpu-memory-utilization 0.95 --port 6578
-```
-
-Then, we run the following test script:
-
-```sh
-CUDA_VISIBLE=1 python tests_local.py
-```
+The local integration script expects an OpenAI-compatible server at `http://localhost:6578/v1`. See [Local Deployment](#local-deployment-vllm) for server setup.
 
 ## Reproducing our Experiments
 
@@ -270,7 +234,7 @@ our [HuggingFace dataset](https://huggingface.co/datasets/osunlp/HippoRAG_v2) an
 
 To test your environment is properly set up, you can use the small dataset `reproduce/dataset/sample.json` for debugging as shown below.
 
-### Running Indexing & QA
+### Running indexing and QA
 
 Initialize the environmental variables and activate the environment:
 
@@ -282,13 +246,25 @@ export OPENAI_API_KEY=<your openai api key>   # if you want to use OpenAI model
 conda activate hipporag
 ```
 
-### Run with OpenAI Model
+### OpenAI
 
 ```sh
 dataset=sample  # or any other dataset under `reproduce/dataset`
 
 # Run OpenAI model
 python main.py --dataset $dataset --llm_base_url https://api.openai.com/v1 --llm_name gpt-4o-mini --embedding_name nvidia/NV-Embed-v2
+```
+
+Azure OpenAI uses the same entry point:
+
+```sh
+python main.py --dataset sample --embedding_name text-embedding-3-small --azure_endpoint <chat-completions-url> --azure_embedding_endpoint <embeddings-url>
+```
+
+To run the standard dense-retrieval/DPR-style baseline, add `--rag_type standard`. Both methods share the same loading and evaluation logic:
+
+```sh
+python main.py --dataset sample --rag_type standard --embedding_batch_size 1
 ```
 
 ### Run with vLLM (Llama)
@@ -316,7 +292,7 @@ dataset=sample
 python main.py --dataset $dataset --llm_base_url http://localhost:8000/v1 --llm_name meta-llama/Llama-3.3-70B-Instruct --embedding_name nvidia/NV-Embed-v2
 ```
 
-#### Advanced: Run with vLLM offline batch
+#### Advanced: vLLM offline batch
 
 vLLM offers an [offline batch mode](https://docs.vllm.ai/en/latest/getting_started/quickstart.html#offline-batched-inference) for faster inference, which could bring us more than 3x faster indexing compared to vLLM online server. 
 
@@ -329,7 +305,7 @@ export HF_HOME=<path to Huggingface home directory>
 export OPENAI_API_KEY=''
 dataset=sample
 
-python main.py --dataset $dataset --llm_name meta-llama/Llama-3.3-70B-Instruct --openie_mode offline --skip_graph
+python main.py --dataset $dataset --llm_name meta-llama/Llama-3.3-70B-Instruct --openie_mode offline
 ```
 
 2. After the first step, OpenIE result is saved to file. Go back to run vLLM online server and main program as described in the `Run with vLLM (Llama)` main section.
@@ -444,14 +420,16 @@ When preparing your data, you may need to chunk each passage, as longer passage 
 │   ├── HippoRAG.py          # Highest level class for initiating retrieval, question answering, and evaluations
 │   ├── embedding_store.py   # Storage database to load, manage and save embeddings for passages, entities and facts.
 │   ├── rerank.py            # Reranking and filtering methods
-│-- 📂 examples
-│   ├── ...
-│   ├── ...
+│-- 📂 examples              # Minimal provider-specific usage examples
+│-- 📂 tests
+│   ├── 📂 integration       # Manual provider and vector-store integration checks
+│   ├── test_bedrock_mantle.py
+│   ├── test_offline_regressions.py
+│-- 📂 reproduce/dataset     # Sample and paper evaluation datasets
+│-- 📜 main.py               # Unified HippoRAG, Azure, and standard-RAG experiment entry point
 │-- 📜 README.md
 │-- 📜 requirements.txt   # Dependencies list
 │-- 📜 .gitignore         # Files to exclude from Git
-
-
 ```
 
 ## Contact

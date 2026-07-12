@@ -6,7 +6,7 @@ No OpenAI key or GPU required -- a deterministic MockEmbeddingModel is used.
 Usage
 -----
 # All backends (skip Qdrant/Chroma if packages not installed)
-python tests_vector_stores.py
+python tests/integration/run_vector_stores.py
 
 # Install optional backends first:
 pip install qdrant-client   # for Qdrant tests

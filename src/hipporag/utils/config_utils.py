@@ -55,6 +55,18 @@ class BaseConfig:
         default_factory=lambda: { "type": "json_object" },
         metadata={"help": "Specifying the format that the model must output."}
     )
+    bedrock_mantle_auth: Literal["api_key", "aws_credentials"] = field(
+        default="api_key",
+        metadata={"help": "Authentication method for the Amazon Bedrock Mantle endpoint."}
+    )
+    bedrock_aws_profile: Optional[str] = field(
+        default=None,
+        metadata={"help": "AWS profile used when Bedrock Mantle authentication is aws_credentials."}
+    )
+    bedrock_region: Optional[str] = field(
+        default=None,
+        metadata={"help": "AWS region used to sign Bedrock Mantle requests."}
+    )
     
     ## LLM specific attributes -> Async hyperparameters
     max_retry_attempts: int = field(
