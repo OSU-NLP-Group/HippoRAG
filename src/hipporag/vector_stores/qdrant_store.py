@@ -7,12 +7,12 @@ Requires:
 Supports both local (file-based) and remote Qdrant deployments:
 
     # Local — no server needed
-    HippoRAG(..., vector_store_type="qdrant")
+    HippoRAG(global_config=BaseConfig(vector_store_type="qdrant"))
 
     # Remote
-    HippoRAG(..., vector_store_type="qdrant",
-              qdrant_url="http://localhost:6333",
-              qdrant_api_key="<key>")
+    HippoRAG(global_config=BaseConfig(vector_store_type="qdrant",
+                                     qdrant_url="http://localhost:6333",
+                                     qdrant_api_key="<key>"))
 """
 from __future__ import annotations
 

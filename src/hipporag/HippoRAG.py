@@ -34,6 +34,7 @@ from .utils.misc_utils import NerRawOutput, TripleRawOutput
 from .utils.embed_utils import retrieve_knn
 from .utils.typing import Triple
 from .utils.config_utils import BaseConfig
+from .utils.state_utils import remove_sources_from_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -330,14 +331,13 @@ class HippoRAG:
         #Filter out triples that appear in unaltered chunks
         true_triples_to_delete = []
 
+        processed_triples = {}
         for triple in triples_to_delete:
             proc_triple = tuple(text_processing(list(triple)))
+            processed_triples[str(proc_triple)] = triple
 
-            doc_ids = self.proc_triples_to_docs[str(proc_triple)]
-
-            non_deleted_docs = doc_ids.difference(chunk_ids_to_delete)
-
-            if len(non_deleted_docs) == 0:
+        for proc_triple_key, triple in processed_triples.items():
+            if remove_sources_from_mapping(self.proc_triples_to_docs, proc_triple_key, chunk_ids_to_delete):
                 true_triples_to_delete.append(triple)
 
         processed_true_triples_to_delete = [[text_processing(list(triple)) for triple in true_triples_to_delete]]
@@ -352,11 +352,7 @@ class HippoRAG:
         filtered_ent_ids_to_delete = []
 
         for ent_node in ent_ids_to_delete:
-            doc_ids = self.ent_node_to_chunk_ids[ent_node]
-
-            non_deleted_docs = doc_ids.difference(chunk_ids_to_delete)
-
-            if len(non_deleted_docs) == 0:
+            if remove_sources_from_mapping(self.ent_node_to_chunk_ids, ent_node, chunk_ids_to_delete):
                 filtered_ent_ids_to_delete.append(ent_node)
 
         logger.info(f"Deleting {len(chunk_ids_to_delete)} Chunks")

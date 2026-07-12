@@ -7,12 +7,12 @@ Requires:
 Supports Milvus Lite, self-hosted Milvus, and Zilliz Cloud:
 
     # Local Milvus Lite, stored inside save_dir
-    HippoRAG(..., vector_store_type="milvus")
+    HippoRAG(global_config=BaseConfig(vector_store_type="milvus"))
 
     # Remote Milvus or Zilliz Cloud
-    HippoRAG(..., vector_store_type="milvus",
-              milvus_uri="http://localhost:19530",
-              milvus_token="<token>")
+    HippoRAG(global_config=BaseConfig(vector_store_type="milvus",
+                                     milvus_uri="http://localhost:19530",
+                                     milvus_token="<token>"))
 """
 from __future__ import annotations
 

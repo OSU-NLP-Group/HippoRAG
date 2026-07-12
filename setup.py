@@ -19,7 +19,7 @@ setuptools.setup(
         "torch==2.5.1",
         "transformers==4.45.2",
         "vllm==0.6.6.post1",
-        "openai==1.91.1",
+        "openai==1.91.0",
         "litellm==1.73.1",
         "gritlm==1.0.2",
         "networkx==3.4.2",
@@ -30,6 +30,12 @@ setuptools.setup(
         "einops", # No version specified
         "tqdm", # No version specified
         "boto3", # No version specified
+        "nest_asyncio",
+        "numpy",
+        "pandas",
+        "pyarrow",
+        "requests",
+        "scipy",
     ],
     extras_require={
         "milvus": ["pymilvus[milvus_lite]>=2.4.2"],

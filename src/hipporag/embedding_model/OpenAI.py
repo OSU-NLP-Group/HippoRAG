@@ -100,11 +100,8 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
             results = []
             for i in range(0, len(texts), batch_size):
                 batch = texts[i:i + batch_size]
-                try:
-                    results.append(self.encode(batch))
-                except:
-                    import ipdb; ipdb.set_trace()
-                pbar.update(batch_size)
+                results.append(self.encode(batch))
+                pbar.update(len(batch))
             pbar.close()
             results = np.concatenate(results)
 
