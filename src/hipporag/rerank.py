@@ -33,7 +33,7 @@ class DSPyFilter:
         self.one_input_template = """[[ ## question ## ]]\n{question}\n\n[[ ## fact_before_filter ## ]]\n{fact_before_filter}\n\nRespond with the corresponding output fields, starting with the field `[[ ## fact_after_filter ## ]]` (must be formatted as a valid Python Fact), and then ending with the marker for `[[ ## completed ## ]]`."""
         self.one_output_template = """[[ ## fact_after_filter ## ]]\n{fact_after_filter}\n\n[[ ## completed ## ]]"""
         self.message_template = self.make_template(dspy_file_path)
-        self.llm_infer_fn = hipporag.llm_model.infer
+        self.llm_infer_fn = hipporag.extraction_llm.infer
         self.model_name = hipporag.global_config.llm_name
         self.default_gen_kwargs = {}
 

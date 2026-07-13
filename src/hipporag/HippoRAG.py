@@ -30,7 +30,8 @@ from .prompts.linking import get_query_instruction
 from .prompts.prompt_template_manager import PromptTemplateManager
 from .rerank import DSPyFilter
 from .utils.misc_utils import *
-from .utils.misc_utils import NerRawOutput, TripleRawOutput
+from .utils.misc_utils import Chunk, NerRawOutput, RetrievalResult, TripleRawOutput
+from .preprocessing import BaseTextPreprocessor, TextPreprocessor
 from .utils.embed_utils import retrieve_knn
 from .utils.typing import Triple
 from .utils.config_utils import BaseConfig
@@ -49,7 +50,11 @@ class HippoRAG:
                  embedding_model_name=None,
                  embedding_base_url=None,
                  azure_endpoint=None,
-                 azure_embedding_endpoint=None):
+                 azure_embedding_endpoint=None,
+                 extraction_llm: BaseLLM = None,
+                 qa_llm: BaseLLM = None,
+                 embedding_model: BaseEmbeddingModel = None,
+                 text_preprocessor: BaseTextPreprocessor = None):
         """
         Initializes an instance of the class and its related components.
 
@@ -125,10 +130,12 @@ class HippoRAG:
             logger.info(f"Creating working directory: {self.working_dir}")
             os.makedirs(self.working_dir, exist_ok=True)
 
-        self.llm_model: BaseLLM = _get_llm_class(self.global_config)
+        self.llm_model: BaseLLM = extraction_llm or qa_llm or _get_llm_class(self.global_config)
+        self.extraction_llm: BaseLLM = extraction_llm or self.llm_model
+        self.qa_llm: BaseLLM = qa_llm or self.llm_model
 
         if self.global_config.openie_mode == 'online':
-            self.openie = OpenIE(llm_model=self.llm_model)
+            self.openie = OpenIE(llm_model=self.extraction_llm)
         elif self.global_config.openie_mode == 'offline':
             from .information_extraction.openie_vllm_offline import VLLMOfflineOpenIE
             self.openie = VLLMOfflineOpenIE(self.global_config)
@@ -141,7 +148,7 @@ class HippoRAG:
         if self.global_config.openie_mode == 'offline':
             self.embedding_model = None
         else:
-            self.embedding_model: BaseEmbeddingModel = _get_embedding_model_class(
+            self.embedding_model: BaseEmbeddingModel = embedding_model or _get_embedding_model_class(
                 embedding_model_name=self.global_config.embedding_model_name)(global_config=self.global_config,
                                                                               embedding_model_name=self.global_config.embedding_model_name)
         self.chunk_embedding_store = get_embedding_store(
@@ -179,6 +186,25 @@ class HippoRAG:
         self.all_retrieval_time = 0
 
         self.ent_node_to_chunk_ids = None
+        self.text_preprocessor = text_preprocessor or TextPreprocessor()
+        self.chunk_metadata_path = os.path.join(self.working_dir, "chunk_metadata.json")
+        self.chunk_metadata = self._load_chunk_metadata()
+
+    def _load_chunk_metadata(self) -> Dict[str, Dict[str, Any]]:
+        if not os.path.exists(self.chunk_metadata_path):
+            return {}
+        with open(self.chunk_metadata_path, "r", encoding="utf-8") as metadata_file:
+            return json.load(metadata_file)
+
+    def _save_chunk_metadata(self) -> None:
+        with open(self.chunk_metadata_path, "w", encoding="utf-8") as metadata_file:
+            json.dump(self.chunk_metadata, metadata_file, ensure_ascii=False, indent=2)
+
+    def _preprocess_docs(self, docs: List[Union[str, Chunk]]) -> List[Chunk]:
+        chunks = self.text_preprocessor.preprocess(docs)
+        if not all(isinstance(chunk, Chunk) for chunk in chunks):
+            raise TypeError("Text preprocessors must return a list of Chunk instances.")
+        return chunks
 
 
     def initialize_graph(self):
@@ -214,11 +240,12 @@ class HippoRAG:
             )
             return preloaded_graph
 
-    def pre_openie(self,  docs: List[str]):
+    def pre_openie(self, docs: List[Union[str, Chunk]]):
         logger.info(f"Indexing Documents")
         logger.info(f"Performing OpenIE Offline")
 
-        chunks = self.chunk_embedding_store.get_missing_string_hash_ids(docs)
+        processed_chunks = self._preprocess_docs(docs)
+        chunks = self.chunk_embedding_store.get_missing_string_hash_ids([chunk.content for chunk in processed_chunks])
 
         all_openie_info, chunk_keys_to_process = self.load_existing_openie(chunks.keys())
         new_openie_rows = {k : chunks[k] for k in chunk_keys_to_process}
@@ -232,7 +259,7 @@ class HippoRAG:
 
         raise RuntimeError("Offline OpenIE completed. Run indexing again with openie_mode='online' to build the graph.")
 
-    def index(self, docs: List[str]):
+    def index(self, docs: List[Union[str, Chunk]]):
         """
         Indexes the given documents based on the HippoRAG 2 framework which generates an OpenIE knowledge graph
         based on the given documents and encodes passages, entities and facts separately for later retrieval.
@@ -246,10 +273,23 @@ class HippoRAG:
 
         logger.info(f"Performing OpenIE")
 
-        if self.global_config.openie_mode == 'offline':
-            self.pre_openie(docs)
+        processed_chunks = self._preprocess_docs(docs)
+        chunk_texts = [chunk.content for chunk in processed_chunks]
 
-        self.chunk_embedding_store.insert_strings(docs)
+        if self.global_config.openie_mode == 'offline':
+            self.pre_openie(processed_chunks)
+
+        self.chunk_embedding_store.insert_strings(chunk_texts)
+        for chunk in processed_chunks:
+            chunk_id = self.chunk_embedding_store.get_hash_id(chunk.content)
+            metadata = dict(chunk.metadata)
+            if chunk.source_id is not None:
+                metadata["source_id"] = chunk.source_id
+            previous_metadata = self.chunk_metadata.get(chunk_id)
+            if previous_metadata is not None and previous_metadata != metadata:
+                logger.warning(f"Replacing metadata for duplicate chunk {chunk_id}.")
+            self.chunk_metadata[chunk_id] = metadata
+        self._save_chunk_metadata()
         chunk_to_rows = self.chunk_embedding_store.get_all_id_to_rows()
 
         all_openie_info, chunk_keys_to_process = self.load_existing_openie(chunk_to_rows.keys())
@@ -365,6 +405,9 @@ class HippoRAG:
         self.entity_embedding_store.delete(filtered_ent_ids_to_delete)
         self.fact_embedding_store.delete(triple_ids_to_delete)
         self.chunk_embedding_store.delete(chunk_ids_to_delete)
+        for chunk_id in chunk_ids_to_delete:
+            self.chunk_metadata.pop(chunk_id, None)
+        self._save_chunk_metadata()
 
         #Delete Nodes from Graph
         self.graph.delete_vertices(list(filtered_ent_ids_to_delete) + list(chunk_ids_to_delete))
@@ -437,9 +480,9 @@ class HippoRAG:
                                                                                          top_k_fact_indices=top_k_fact_indices,
                                                                                          passage_node_weight=self.global_config.passage_node_weight)
 
-            top_k_docs = [self.chunk_embedding_store.get_row(self.passage_node_keys[idx])["content"] for idx in sorted_doc_ids[:num_to_retrieve]]
-
-            retrieval_results.append(QuerySolution(question=query, docs=top_k_docs, doc_scores=sorted_doc_scores[:num_to_retrieve]))
+            result = self._build_retrieval_result(query, sorted_doc_ids, sorted_doc_scores, num_to_retrieve, top_k_facts)
+            retrieval_results.append(QuerySolution(question=result.query, docs=result.docs, doc_scores=result.scores,
+                                                   doc_metadata=result.doc_metadata, graph_seeds=result.graph_seeds))
 
         retrieve_end_time = time.time()  # Record end time
 
@@ -460,6 +503,14 @@ class HippoRAG:
         else:
             return retrieval_results
 
+    def _build_retrieval_result(self, query: str, sorted_doc_ids: np.ndarray, sorted_doc_scores: np.ndarray,
+                                num_to_retrieve: int, graph_seeds: Optional[List[Tuple]] = None) -> RetrievalResult:
+        passage_keys = [self.passage_node_keys[idx] for idx in sorted_doc_ids[:num_to_retrieve]]
+        docs = [self.chunk_embedding_store.get_row(key)["content"] for key in passage_keys]
+        metadata = [dict(self.chunk_metadata.get(key, {})) for key in passage_keys]
+        return RetrievalResult(query=query, docs=docs, scores=np.asarray(sorted_doc_scores[:num_to_retrieve]),
+                               doc_metadata=metadata, graph_seeds=graph_seeds or [])
+
     def retrieve_ircot(self,
                        queries: List[str],
                        max_qa_steps: int,
@@ -479,12 +530,13 @@ class HippoRAG:
         for query in tqdm(queries, desc="IRCoT retrieval"):
             step_result = self.retrieve([query], num_to_retrieve=num_to_retrieve)[0]
             merged_doc_scores = dict(zip(step_result.docs, step_result.doc_scores.tolist()))
+            merged_doc_metadata = dict(zip(step_result.docs, step_result.doc_metadata or []))
             thoughts = []
 
             for _ in range(1, max_qa_steps):
                 ranked_docs = sorted(merged_doc_scores, key=merged_doc_scores.get, reverse=True)
                 thought = reason_step(self.global_config.dataset, self.prompt_template_manager, query,
-                                      ranked_docs[:num_to_retrieve], thoughts, self.llm_model)
+                                      ranked_docs[:num_to_retrieve], thoughts, self.qa_llm)
                 thoughts.append(thought)
                 if 'So the answer is:' in thought:
                     break
@@ -492,12 +544,14 @@ class HippoRAG:
                 step_result = self.retrieve([thought], num_to_retrieve=num_to_retrieve)[0]
                 for doc, score in zip(step_result.docs, step_result.doc_scores.tolist()):
                     merged_doc_scores[doc] = max(merged_doc_scores.get(doc, float('-inf')), score)
+                merged_doc_metadata.update(dict(zip(step_result.docs, step_result.doc_metadata or [])))
 
             ranked_items = sorted(merged_doc_scores.items(), key=lambda item: item[1], reverse=True)
             retrieval_results.append(QuerySolution(question=query,
                                                    docs=[doc for doc, _ in ranked_items],
                                                    doc_scores=np.asarray([score for _, score in ranked_items]),
-                                                   thoughts=thoughts))
+                                                   thoughts=thoughts,
+                                                   doc_metadata=[merged_doc_metadata.get(doc, {}) for doc, _ in ranked_items]))
 
         if gold_docs is None:
             return retrieval_results
@@ -660,11 +714,9 @@ class HippoRAG:
             logger.info('No facts found after reranking, return DPR results')
             sorted_doc_ids, sorted_doc_scores = self.dense_passage_retrieval(query)
 
-            top_k_docs = [self.chunk_embedding_store.get_row(self.passage_node_keys[idx])["content"] for idx in
-                          sorted_doc_ids[:num_to_retrieve]]
-
-            retrieval_results.append(
-                QuerySolution(question=query, docs=top_k_docs, doc_scores=sorted_doc_scores[:num_to_retrieve]))
+            result = self._build_retrieval_result(query, sorted_doc_ids, sorted_doc_scores, num_to_retrieve)
+            retrieval_results.append(QuerySolution(question=result.query, docs=result.docs, doc_scores=result.scores,
+                                                   doc_metadata=result.doc_metadata, graph_seeds=result.graph_seeds))
 
         retrieve_end_time = time.time()  # Record end time
 
@@ -797,7 +849,7 @@ class HippoRAG:
             all_qa_messages.append(
                 self.prompt_template_manager.render(name=f'rag_qa_{prompt_dataset_name}', prompt_user=prompt_user))
 
-        all_qa_results = [self.llm_model.infer(qa_messages) for qa_messages in tqdm(all_qa_messages, desc="QA Reading")]
+        all_qa_results = [self.qa_llm.infer(qa_messages) for qa_messages in tqdm(all_qa_messages, desc="QA Reading")]
 
         all_response_message, all_metadata, all_cache_hit = zip(*all_qa_results)
         all_response_message, all_metadata = list(all_response_message), list(all_metadata)
@@ -994,7 +1046,8 @@ class HippoRAG:
         chunk_keys_to_save = set()
 
         if not self.global_config.force_openie_from_scratch and os.path.isfile(self.openie_results_path):
-            openie_results = json.load(open(self.openie_results_path))
+            with open(self.openie_results_path, encoding="utf-8") as openie_file:
+                openie_results = json.load(openie_file)
             all_openie_info = openie_results.get('docs', [])
 
             #Standardizing indices for OpenIE Files.
@@ -1557,9 +1610,9 @@ class HippoRAG:
                     phrase_weights[phrase_id] += weighted_fact_score
                     number_of_occurs[phrase_id] += 1
 
-                phrases_and_ids.add((phrase, phrase_id))
+                    phrases_and_ids.add((phrase, phrase_id))
 
-        phrase_weights /= number_of_occurs
+        phrase_weights = np.divide(phrase_weights, number_of_occurs, out=np.zeros_like(phrase_weights), where=number_of_occurs != 0)
 
         for phrase, phrase_id in phrases_and_ids:
             if phrase not in phrase_scores:

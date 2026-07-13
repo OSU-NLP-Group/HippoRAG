@@ -1,5 +1,5 @@
 from argparse import ArgumentTypeError
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import md5
 from typing import Dict, Any, List, Tuple, Literal, Union, Optional
 import numpy as np
@@ -31,6 +31,24 @@ class LinkingOutput:
     score: np.ndarray
     type: Literal['node', 'dpr']
 
+
+@dataclass(frozen=True)
+class Chunk:
+    """A text chunk and its source metadata before indexing."""
+    content: str
+    source_id: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class RetrievalResult:
+    """Internal result for one retrieval query."""
+    query: str
+    docs: List[str]
+    scores: np.ndarray
+    doc_metadata: List[Dict[str, Any]] = field(default_factory=list)
+    graph_seeds: List[Tuple] = field(default_factory=list)
+
 @dataclass
 class QuerySolution:
     question: str
@@ -40,6 +58,8 @@ class QuerySolution:
     gold_answers: List[str] = None
     gold_docs: Optional[List[str]] = None
     thoughts: Optional[List[str]] = None
+    doc_metadata: Optional[List[Dict[str, Any]]] = None
+    graph_seeds: Optional[List[Tuple]] = None
 
 
     def to_dict(self):
@@ -50,6 +70,8 @@ class QuerySolution:
             "docs": self.docs[:5],
             "doc_scores": [round(v, 4) for v in self.doc_scores.tolist()[:5]]  if self.doc_scores is not None else None,
             "gold_docs": self.gold_docs,
+            "doc_metadata": self.doc_metadata[:5] if self.doc_metadata is not None else None,
+            "graph_seeds": self.graph_seeds,
         }
         if self.thoughts is not None:
             result["thoughts"] = self.thoughts
