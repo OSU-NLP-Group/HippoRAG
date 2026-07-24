@@ -20,7 +20,9 @@ class VLLMEmbeddingModel(BaseEmbeddingModel):
         self.embedding_type = 'float'
         self.batch_size = 32
 
-        self.url = global_config.embedding_base_url
+        self.base_url = global_config.embedding_base_url
+        if not self.base_url:
+            raise ValueError("embedding_base_url is required for VLLM embedding models")
 
         self.search_query_instr = set([
             get_query_instruction('query_to_fact'),

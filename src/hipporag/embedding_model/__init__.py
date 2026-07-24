@@ -27,4 +27,4 @@ def _get_embedding_model_class(embedding_model_name: str = "nvidia/NV-Embed-v2")
         return TransformersEmbeddingModel
     elif embedding_model_name.startswith("VLLM/"):
         return VLLMEmbeddingModel
-    assert False, f"Unknown embedding model name: {embedding_model_name}"
+    raise ValueError(f"Unknown embedding model name: {embedding_model_name}")

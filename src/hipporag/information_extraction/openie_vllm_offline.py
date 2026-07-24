@@ -65,7 +65,7 @@ class VLLMOfflineOpenIE(OpenIE):
             response = triple_output_instance
             try:
                 triples = json.loads(response)["triples"]
-            except:
+            except Exception as e:
                 triples = []
                 logger.warning(f"Could not parse response from OpenIE: {e}")
             if len(triples) == 0:

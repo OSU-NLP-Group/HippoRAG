@@ -55,6 +55,18 @@ class BaseConfig:
         default_factory=lambda: { "type": "json_object" },
         metadata={"help": "Specifying the format that the model must output."}
     )
+    bedrock_mantle_auth: Literal["api_key", "aws_credentials"] = field(
+        default="api_key",
+        metadata={"help": "Authentication method for the Amazon Bedrock Mantle endpoint."}
+    )
+    bedrock_aws_profile: Optional[str] = field(
+        default=None,
+        metadata={"help": "AWS profile used when Bedrock Mantle authentication is aws_credentials."}
+    )
+    bedrock_region: Optional[str] = field(
+        default=None,
+        metadata={"help": "AWS region used to sign Bedrock Mantle requests."}
+    )
     
     ## LLM specific attributes -> Async hyperparameters
     max_retry_attempts: int = field(
@@ -197,6 +209,58 @@ class BaseConfig:
     save_dir: str = field(
         default=None,
         metadata={"help": "Directory to save all related information. If it's given, will overwrite all default save_dir setups. If it's not given, then if we're not running specific datasets, default to `outputs`, otherwise, default to a dataset-customized output dir."}
+    )
+
+    # Vector store backend
+    vector_store_type: Literal["parquet", "qdrant", "chroma", "milvus"] = field(
+        default="parquet",
+        metadata={"help": "Which embedding store backend to use. "
+                  "'parquet' (default) stores embeddings in local Parquet files. "
+                  "'qdrant' uses a Qdrant vector database (local file or remote). "
+                  "'chroma' uses a ChromaDB collection (local file or remote HTTP). "
+                  "'milvus' uses Milvus Lite, Milvus server, or Zilliz Cloud."}
+    )
+
+    # Qdrant-specific settings (only used when vector_store_type='qdrant')
+    qdrant_url: Optional[str] = field(
+        default=None,
+        metadata={"help": "URL of a remote Qdrant server (e.g. 'http://localhost:6333'). "
+                  "If None, a local file-based Qdrant store is used inside save_dir."}
+    )
+    qdrant_api_key: Optional[str] = field(
+        default=None,
+        metadata={"help": "API key for Qdrant Cloud or a secured remote Qdrant instance."}
+    )
+
+    # ChromaDB-specific settings (only used when vector_store_type='chroma')
+    chroma_host: Optional[str] = field(
+        default=None,
+        metadata={"help": "Hostname of a remote ChromaDB HTTP server. "
+                  "If None, a local persistent ChromaDB store is used inside save_dir."}
+    )
+    chroma_port: int = field(
+        default=8000,
+        metadata={"help": "Port of the remote ChromaDB HTTP server."}
+    )
+
+    # Milvus-specific settings (only used when vector_store_type='milvus')
+    milvus_uri: Optional[str] = field(
+        default=None,
+        metadata={"help": "Milvus URI. If None, MILVUS_URI is used when set; otherwise "
+                  "a local Milvus Lite database is created inside save_dir."}
+    )
+    milvus_token: Optional[str] = field(
+        default=None,
+        metadata={"help": "Milvus or Zilliz Cloud token. If None, MILVUS_TOKEN is used when set."}
+    )
+    milvus_db_name: Optional[str] = field(
+        default=None,
+        metadata={"help": "Milvus database name. If None, MILVUS_DB_NAME is used when set."}
+    )
+    milvus_consistency_level: Optional[Literal["Strong", "Session", "Bounded", "Eventually"]] = field(
+        default=None,
+        metadata={"help": "Milvus consistency level. If None, MILVUS_CONSISTENCY_LEVEL is used "
+                  "when set; otherwise the Milvus client default is used."}
     )
     
     

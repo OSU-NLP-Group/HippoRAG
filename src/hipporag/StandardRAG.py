@@ -19,7 +19,7 @@ import time
 
 from .llm import _get_llm_class, BaseLLM
 from .embedding_model import _get_embedding_model_class, BaseEmbeddingModel
-from .embedding_store import EmbeddingStore
+from .embedding_store import EmbeddingStore, get_embedding_store
 from .information_extraction import OpenIE
 from .information_extraction.openie_vllm_offline import VLLMOfflineOpenIE
 from .evaluation.retrieval_eval import RetrievalRecall
@@ -84,19 +84,18 @@ class StandardRAG:
 
         self.llm_model: BaseLLM = _get_llm_class(self.global_config)
 
-        if self.global_config.openie_mode == 'offline':
-            self.embedding_model = None
-        else:
-            self.embedding_model: BaseEmbeddingModel = _get_embedding_model_class(
-                embedding_model_name=self.global_config.embedding_model_name)(global_config=self.global_config,
-                                                                              embedding_model_name=self.global_config.embedding_model_name)
+        # StandardRAG does not run OpenIE and always needs passage embeddings.
+        self.embedding_model: BaseEmbeddingModel = _get_embedding_model_class(
+            embedding_model_name=self.global_config.embedding_model_name)(global_config=self.global_config,
+                                                                          embedding_model_name=self.global_config.embedding_model_name)
 
-        import ipdb;
-        ipdb.set_trace()
-
-        self.chunk_embedding_store = EmbeddingStore(self.embedding_model,
-                                                    os.path.join(self.working_dir, "chunk_embeddings"),
-                                                    self.global_config.embedding_batch_size, 'chunk')
+        self.chunk_embedding_store = get_embedding_store(
+            self.embedding_model,
+            os.path.join(self.working_dir, "chunk_embeddings"),
+            self.global_config.embedding_batch_size,
+            'chunk',
+            self.global_config,
+        )
 
         self.ready_to_retrieve = False
 
@@ -255,7 +254,7 @@ class StandardRAG:
             if gold_docs is not None:
                 queries, overall_retrieval_result = self.retrieve(queries=queries, gold_docs=gold_docs)
             else:
-                queries = self.retrieve_dpr(queries=queries)
+                queries = self.retrieve(queries=queries)
 
         # Performing QA
         queries_solutions, all_response_message, all_metadata = self.qa(queries)

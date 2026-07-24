@@ -30,5 +30,14 @@ setuptools.setup(
         "einops", # No version specified
         "tqdm", # No version specified
         "boto3", # No version specified
-    ]
+        "nest_asyncio",
+        "numpy",
+        "pandas",
+        "pyarrow",
+        "requests",
+        "scipy",
+    ],
+    extras_require={
+        "milvus": ["pymilvus[milvus_lite]>=2.4.2"],
+    },
 )
