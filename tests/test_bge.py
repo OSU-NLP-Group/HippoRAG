@@ -1,9 +1,10 @@
 """
 Tests for the BGE embedding model integration (GraphRAG-Benchmark support).
 
-Run from a raw clone (no install needed), like the other test scripts:
+Collected by pytest. Uses the INSTALLED ``hipporag`` package.
 
-    python test_bge.py
+    pytest tests/test_bge.py                 # Tier A only (hermetic, the default)
+    pytest -m integration tests/test_bge.py  # also run Tier B (loads a checkpoint)
 
 Optional env vars:
     BGE_TEST_MODEL   : local path or HF id of a BGE checkpoint to exercise the
@@ -17,10 +18,9 @@ cannot be loaded.
 """
 
 import os
-import sys
-import traceback
 
 import numpy as np
+import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -28,9 +28,9 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 def test_dispatch():
-    from src.hipporag.embedding_model import _get_embedding_model_class
-    from src.hipporag.embedding_model.BGE import BGEEmbeddingModel
-    from src.hipporag.embedding_model.base import BaseEmbeddingModel
+    from hipporag.embedding_model import _get_embedding_model_class
+    from hipporag.embedding_model.BGE import BGEEmbeddingModel
+    from hipporag.embedding_model.base import BaseEmbeddingModel
 
     print("  [1] BGE names route to BGEEmbeddingModel ...", end=" ")
     bge_names = [
@@ -89,12 +89,16 @@ def test_dispatch():
 # ---------------------------------------------------------------------------
 
 def _make_model(global_config, model_name):
-    from src.hipporag.embedding_model.BGE import BGEEmbeddingModel
+    from hipporag.embedding_model.BGE import BGEEmbeddingModel
     return BGEEmbeddingModel(global_config=global_config, embedding_model_name=model_name)
 
 
+@pytest.mark.integration
 def test_encode():
-    from src.hipporag.utils.config_utils import BaseConfig
+    from hipporag.utils.config_utils import BaseConfig
+
+    if os.environ.get("BGE_TEST_SKIP_INT") == "1":
+        pytest.skip("BGE_TEST_SKIP_INT set")
 
     model_name = os.environ.get("BGE_TEST_MODEL", "BAAI/bge-small-en-v1.5")
 
@@ -107,8 +111,7 @@ def test_encode():
         )
         model = _make_model(config, model_name)
     except Exception as e:
-        print(f"\n  [SKIP] integration -- could not load model: {type(e).__name__}: {e}")
-        return
+        pytest.skip(f"could not load model: {type(e).__name__}: {e}")
 
     dim = model.embedding_dim
     texts = [
@@ -177,28 +180,5 @@ def test_encode():
 # Entry point
 # ---------------------------------------------------------------------------
 
-def main():
-    print("HippoRAG BGE Embedding Tests")
-    print(f"Python {sys.version}\n")
-
-    passed, failed, skipped = [], [], []
-
-    for name, fn in [("dispatch", test_dispatch), ("integration", test_encode)]:
-        try:
-            fn()
-            passed.append(name)
-        except Exception:
-            failed.append(name)
-            print(f"\n  FAIL: {name} FAILED:")
-            traceback.print_exc()
-
-    print(f"\n{'=' * 55}")
-    print(f"Results: {len(passed)} passed, {len(failed)} failed")
-    if failed:
-        print(f"Failed:  {', '.join(failed)}")
-        sys.exit(1)
-    print("All tests passed!")
-
-
 if __name__ == "__main__":
-    main()
+    raise SystemExit(pytest.main([__file__]))

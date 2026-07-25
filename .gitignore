@@ -12,6 +12,8 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+# Ignore pytest cache
+.pytest_cache/
 # Ignore nohup_out directory
 nohup_out/
 # Ignore outputs directory

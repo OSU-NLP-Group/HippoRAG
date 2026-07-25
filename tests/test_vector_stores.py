@@ -2,27 +2,23 @@
 Tests for vector store backends (Parquet, Qdrant, ChromaDB, Milvus).
 
 No OpenAI key or GPU required -- a deterministic MockEmbeddingModel is used.
+Collected by pytest:
 
-Usage
------
-# All backends (skip Qdrant/Chroma if packages not installed)
-python tests/integration/run_vector_stores.py
+    pytest tests/test_vector_stores.py
 
-# Install optional backends first:
-pip install qdrant-client   # for Qdrant tests
-pip install chromadb        # for Chroma tests
-pip install "pymilvus[milvus_lite]"  # for Milvus Lite tests
+Optional backends are skipped automatically when their client lib is missing:
+
+    pip install qdrant-client                # for Qdrant tests
+    pip install chromadb                     # for Chroma tests
+    pip install "pymilvus[milvus_lite]"      # for Milvus Lite tests
 """
 
-import os
-import sys
-import shutil
-import tempfile
-import traceback
 import importlib
+import os
 from typing import List
 
 import numpy as np
+import pytest
 
 # ---------------------------------------------------------------------------
 # Mock embedding model -- returns stable random vectors, no GPU needed
@@ -159,9 +155,10 @@ def _test_persistence(make_store, label: str):
 # Per-backend test runners
 # ---------------------------------------------------------------------------
 
-def test_parquet(tmp_dir: str):
+def test_parquet(tmp_path):
     from hipporag.embedding_store import EmbeddingStore
 
+    tmp_dir = str(tmp_path)
     label = "Parquet"
     print(f"\n{'='*55}")
     print(f"  Backend: {label}")
@@ -178,13 +175,11 @@ def test_parquet(tmp_dir: str):
     print(f"\n  PASS: {label} -- all tests passed")
 
 
-def test_qdrant(tmp_dir: str):
-    if importlib.util.find_spec("qdrant_client") is None:
-        print("\n  [SKIP] Qdrant -- qdrant-client not installed  (pip install qdrant-client)")
-        return
-
+def test_qdrant(tmp_path):
+    pytest.importorskip("qdrant_client")
     from hipporag.vector_stores.qdrant_store import QdrantEmbeddingStore
 
+    tmp_dir = str(tmp_path)
     label = "Qdrant (local)"
     print(f"\n{'='*55}")
     print(f"  Backend: {label}")
@@ -207,13 +202,11 @@ def test_qdrant(tmp_dir: str):
     print(f"\n  PASS: {label} -- all tests passed")
 
 
-def test_chroma(tmp_dir: str):
-    if importlib.util.find_spec("chromadb") is None:
-        print("\n  [SKIP] ChromaDB -- chromadb not installed  (pip install chromadb)")
-        return
-
+def test_chroma(tmp_path):
+    pytest.importorskip("chromadb")
     from hipporag.vector_stores.chroma_store import ChromaEmbeddingStore
 
+    tmp_dir = str(tmp_path)
     label = "ChromaDB (local)"
     print(f"\n{'='*55}")
     print(f"  Backend: {label}")
@@ -236,13 +229,11 @@ def test_chroma(tmp_dir: str):
     print(f"\n  PASS: {label} -- all tests passed")
 
 
-def test_milvus(tmp_dir: str):
-    if importlib.util.find_spec("pymilvus") is None:
-        print('\n  [SKIP] Milvus -- pymilvus not installed  (pip install "pymilvus[milvus_lite]")')
-        return
-
+def test_milvus(tmp_path):
+    pytest.importorskip("pymilvus")
     from hipporag.vector_stores.milvus_store import MilvusEmbeddingStore
 
+    tmp_dir = str(tmp_path)
     label = "Milvus Lite (local)"
     print(f"\n{'='*55}")
     print(f"  Backend: {label}")
@@ -260,8 +251,7 @@ def test_milvus(tmp_dir: str):
     try:
         store = MilvusEmbeddingStore(EMBEDDING_MODEL, db_path, batch_size=16, namespace="chunk", global_config=cfg)
     except ImportError as exc:
-        print(f'\n  [SKIP] Milvus -- {exc}  (pip install "pymilvus[milvus_lite]")')
-        return
+        pytest.skip(f"Milvus Lite extra missing: {exc}")
 
     _run_store_tests(store, label)
     store.close()
@@ -273,10 +263,11 @@ def test_milvus(tmp_dir: str):
     print(f"\n  PASS: {label} -- all tests passed")
 
 
-def test_factory(tmp_dir: str):
+def test_factory(tmp_path):
     """Verify get_embedding_store() returns the right class for each type."""
     from hipporag.embedding_store import get_embedding_store, EmbeddingStore, BaseEmbeddingStore
 
+    tmp_dir = str(tmp_path)
     print(f"\n{'='*55}")
     print("  Factory: get_embedding_store()")
     print(f"{'='*55}")
@@ -330,40 +321,5 @@ def test_factory(tmp_dir: str):
 # Entry point
 # ---------------------------------------------------------------------------
 
-def main():
-    print("HippoRAG Vector Store Tests")
-    print(f"Python {sys.version}")
-
-    tmp_dir = tempfile.mkdtemp(prefix="hipporag_vstore_test_")
-    print(f"\nTemp directory: {tmp_dir}")
-
-    passed, failed = [], []
-
-    for name, fn in [
-        ("Parquet", test_parquet),
-        ("Qdrant", test_qdrant),
-        ("ChromaDB", test_chroma),
-        ("Milvus", test_milvus),
-        ("Factory", test_factory),
-    ]:
-        try:
-            fn(tmp_dir)
-            passed.append(name)
-        except Exception:
-            failed.append(name)
-            print(f"\n  FAIL: {name} FAILED:")
-            traceback.print_exc()
-
-    shutil.rmtree(tmp_dir, ignore_errors=True)
-
-    print(f"\n{'='*55}")
-    print(f"Results: {len(passed)} passed, {len(failed)} failed")
-    if failed:
-        print(f"Failed:  {', '.join(failed)}")
-        sys.exit(1)
-    else:
-        print("All tests passed!")
-
-
 if __name__ == "__main__":
-    main()
+    raise SystemExit(pytest.main([__file__]))

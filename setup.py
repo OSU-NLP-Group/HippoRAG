@@ -42,5 +42,6 @@ setuptools.setup(
     ],
     extras_require={
         "milvus": ["pymilvus[milvus_lite]>=2.4.2"],
+        "dev": ["pytest>=8"],
     },
 )

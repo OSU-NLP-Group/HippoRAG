@@ -336,6 +336,11 @@ class HippoRAG:
             self.augment_graph()
             self.save_igraph()
 
+        # Invalidate in-memory retrieval objects: index() appended new chunks/triples
+        # to disk, so structures like proc_triples_to_docs must be rebuilt on the next
+        # retrieve/rag_qa/delete. Mirrors delete() (which also sets this to False).
+        self.ready_to_retrieve = False
+
     def delete(self, docs_to_delete: List[str]):
         """
         Deletes the given documents from all data structures within the HippoRAG class.

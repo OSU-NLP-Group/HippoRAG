@@ -239,23 +239,76 @@ config = BaseConfig(
 
 ## Testing
 
-Run the offline unit tests before submitting changes:
+Install the test runner and the package in editable mode first:
 
 ```sh
-python -m unittest discover -s tests -p 'test_*.py'
-python tests/integration/run_vector_stores.py
+pip install -e ".[dev]"        # adds pytest
+pip install -e ".[dev,milvus]" # also enables the Milvus vector-store test
 ```
 
-Provider integration scripts exercise indexing, graph reload, incremental updates, and deletion. They require the corresponding API or local model service:
+### Offline tests (no API keys, no GPU)
 
-| Provider | Command |
-| --- | --- |
-| OpenAI | `python tests/integration/run_openai.py` |
-| Azure OpenAI | `python tests/integration/run_azure.py --azure_endpoint <url> --azure_embedding_endpoint <url>` |
-| Local vLLM | `python tests/integration/run_local.py` |
-| Transformers | `python tests/integration/run_transformers.py` |
+Run the full hermetic suite with one command:
 
-The local integration script expects an OpenAI-compatible server at `http://localhost:6578/v1`. See [Local Deployment](#local-deployment-vllm) for server setup.
+```sh
+pytest
+```
+
+This collects every `tests/test_*.py`: the GraphRAG-Benchmark API contract test, the Bedrock Mantle dispatch/auth test, the BGE dispatch test, and the vector-store tests (Parquet runs always; Qdrant/Chroma/Milvus auto-skip if their client lib is missing).
+
+Optional vector-store backends:
+
+```sh
+pip install qdrant-client chromadb "pymilvus[milvus_lite]"
+```
+
+Useful flags:
+
+```sh
+pytest -s                                                            # show per-step print output
+pytest tests/test_bge.py                                             # a single file
+pytest tests/test_benchmark_contract.py::test_base_config_kwargs     # a single test
+```
+
+### Tests that need GPU or network
+
+The BGE encode tier loads a real checkpoint (network/GPU). It is marked `integration` and excluded from the default run:
+
+```sh
+pytest -m integration                                              # run only integration-marked tests
+pytest -m "not integration"                                        # hermetic only (the default)
+BGE_TEST_MODEL=BAAI/bge-m3 pytest -m integration tests/test_bge.py # override checkpoint
+BGE_TEST_SKIP_INT=1 pytest -m integration tests/test_bge.py        # force-skip the encode tier
+```
+
+### Provider integration scripts
+
+These exercise indexing, graph reload, incremental updates, and deletion end-to-end. They are plain scripts (not collected by pytest) and require the corresponding service or credentials — set up your environment as in [Installation](#installation):
+
+| Provider | Command | Requires |
+| --- | --- | --- |
+| OpenAI | `python tests/integration/run_openai.py` | `OPENAI_API_KEY` |
+| Azure OpenAI | `python tests/integration/run_azure.py --azure_endpoint <url> --azure_embedding_endpoint <url>` | Azure endpoints/credentials |
+| Local vLLM | `python tests/integration/run_local.py` | OpenAI-compatible server at `http://localhost:6578/v1` (see [Local Deployment](#local-deployment-vllm)) |
+| Transformers | `python tests/integration/run_transformers.py` | GPU; local offline model |
+
+The OpenAI script (`tests/integration/run_openai.py`) accepts CLI flags with environment-variable defaults (precedence: CLI > env > default):
+
+| Setting | CLI flag | Env var | Default |
+| --- | --- | --- | --- |
+| LLM model | `--llm_model_name` | `OPENAI_LLM_MODEL` | `gpt-4o-mini` |
+| Embedding model | `--embedding_model_name` | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` |
+| Working directory | `--save_dir` | — | `outputs/openai_test` |
+
+The base URL and API key are read natively by the openai SDK from `OPENAI_BASE_URL` (default `https://api.openai.com/v1`) and `OPENAI_API_KEY`. For an OpenAI-compatible endpoint that does not require auth, set `OPENAI_API_KEY` to any non-empty placeholder.
+
+```sh
+export OPENAI_BASE_URL=https://your-endpoint/v1   # optional; defaults to the public OpenAI API
+export OPENAI_API_KEY=<key>
+export OPENAI_LLM_MODEL=gpt-4o-mini
+export OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+python tests/integration/run_openai.py            # run with --help to see all flags
+```
 
 ## Reproducing our Experiments
 
@@ -460,9 +513,11 @@ When preparing your data, you may need to chunk each passage, as longer passage 
 │   ├── rerank.py            # Reranking and filtering methods
 │-- 📂 examples              # Minimal provider-specific usage examples
 │-- 📂 tests
-│   ├── 📂 integration       # Manual provider and vector-store integration checks
-│   ├── test_bedrock_mantle.py
-│   ├── test_offline_regressions.py
+│   ├── 📂 integration            # Manual provider scripts: run_{openai,azure,local,transformers}.py
+│   ├── test_bge.py               # BGE embedding dispatch + encode tests
+│   ├── test_benchmark_contract.py # GraphRAG-Benchmark API contract test
+│   ├── test_bedrock_mantle.py    # Bedrock Mantle dispatch + auth tests
+│   ├── test_vector_stores.py     # Vector-store backends (Parquet/Qdrant/Chroma/Milvus)
 │-- 📂 reproduce/dataset     # Sample and paper evaluation datasets
 │-- 📜 main.py               # Unified HippoRAG, Azure, and standard-RAG experiment entry point
 │-- 📜 README.md

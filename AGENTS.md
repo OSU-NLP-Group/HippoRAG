@@ -9,24 +9,30 @@ Repo-specific guidance for OpenCode sessions working on HippoRAG 2.
 
 ## Tooling & verification
 
-- **No lint / typecheck / formatter / CI is configured.** Do not invent commands; there is no `pytest`, `ruff`, `mypy`, `pyproject.toml`, or `.github/` workflow.
+- **Test runner: pytest** (configured via `pytest.ini`; installed through the `dev` extra: `pip install -e .[dev]`). **No lint / typecheck / formatter / CI is configured** — do not invent commands; there is no `ruff`, `mypy`, or `.github/` workflow.
 - Python 3.10 via conda is the supported runtime (see `README.md`).
-- Tests are **plain scripts, not pytest cases**. Run them directly, e.g. `python tests/integration/run_openai.py`. Most `print` results and `assert`; `tests/test_bedrock_mantle.py` uses `unittest`. There is no test runner config.
+- Hermetic tests live in `tests/test_*.py` and are **collected by pytest** (functions named `test_*`, plus `unittest.TestCase` classes). Provider integration scripts under `tests/integration/run_*.py` are plain scripts — pytest does **not** collect them (filename `run_*`); run them directly, e.g. `python tests/integration/run_openai.py`.
+- Run tests with:
+  ```sh
+  pytest                                  # all hermetic tests (the default; -m "not integration")
+  pytest -m integration                   # also GPU/network-marked tests (BGE encode tier)
+  python tests/integration/run_openai.py  # provider integration (plain script)
+  ```
 
 ## Tests — what each one needs
 
-Most tests make real network or GPU calls. Pick by what your environment has:
+Hermetic tests are collected by `pytest`; provider scripts are run manually. All tests under `tests/` use the installed `hipporag` package, so `pip install -e .` is required.
 
-| Script | Requires |
-|---|---|
-| `tests/test_benchmark_contract.py` | **Nothing external** — hermetic; verifies the public API contract that GraphRAG-Benchmark's `Examples/run_hipporag2.py` depends on. Requires `pip install -e .` (uses the installed `hipporag` package). Run after every upstream sync. |
-| `tests/integration/run_vector_stores.py` | **Nothing external** — uses a built-in `MockEmbeddingModel`. Hermetic sanity check for the storage layer (Parquet/Qdrant/Chroma/Milvus). |
-| `tests/test_bedrock_mantle.py` | **Nothing external** — hermetic `unittest` covering Bedrock Mantle dispatch + auth (uses mocks). Requires `pip install -e .`. |
-| `test_bge.py` | Tier A (dispatch) is hermetic; Tier B (encode) loads a BGE checkpoint (network/GPU), gracefully skipped if unavailable. Model override: `BGE_TEST_MODEL=BAAI/bge-small-en-v1.5`. |
-| `tests/integration/run_openai.py` | `OPENAI_API_KEY` env var. Cheap but bills OpenAI. |
-| `tests/integration/run_local.py` | A vLLM server at `http://localhost:6578/v1`. |
-| `tests/integration/run_azure.py` | Azure OpenAI endpoints/credentials. |
-| `tests/integration/run_transformers.py` | GPU; runs a local Transformers model offline. |
+| Script | pytest? | Requires |
+|---|---|---|
+| `tests/test_benchmark_contract.py` | yes | **Nothing external** — verifies the public API contract that GraphRAG-Benchmark's `Examples/run_hipporag2.py` depends on. Run after every upstream sync. |
+| `tests/test_vector_stores.py` | yes | **Nothing external** — `MockEmbeddingModel`; Parquet always, Qdrant/Chroma/Milvus auto-skip if their client lib is missing. |
+| `tests/test_bedrock_mantle.py` | yes (`unittest.TestCase`) | **Nothing external** — Bedrock Mantle dispatch + auth (mocks). |
+| `tests/test_bge.py` | Tier A yes; Tier B (`test_encode`) only via `pytest -m integration` | Tier A hermetic; Tier B loads a BGE checkpoint (network/GPU), gracefully skipped if unavailable. Override: `BGE_TEST_MODEL=...`; force-skip: `BGE_TEST_SKIP_INT=1`. |
+| `tests/integration/run_openai.py` | no (plain script) | `OPENAI_API_KEY`. Cheap but bills OpenAI. |
+| `tests/integration/run_local.py` | no (plain script) | A vLLM server at `http://localhost:6578/v1`. |
+| `tests/integration/run_azure.py` | no (plain script) | Azure OpenAI endpoints/credentials. |
+| `tests/integration/run_transformers.py` | no (plain script) | GPU; runs a local Transformers model offline. |
 
 Optional vector-store backends are skipped automatically if their client lib is missing: `pip install qdrant-client`, `pip install chromadb`, and/or `pip install "pymilvus[milvus_lite]"` to enable those tests.
 
@@ -34,12 +40,12 @@ Optional vector-store backends are skipped automatically if their client lib is 
 
 The package uses a **`src/` layout** (`setup.py` sets `package_dir={"": "src"}`).
 
-- After `pip install hipporag` (or `pip install -e .`): `from hipporag import HippoRAG`. This is what `tests/integration/run_*.py`, `tests/test_bedrock_mantle.py`, and `tests/test_benchmark_contract.py` do — they require the installed package.
-- Running from a raw clone **without** install (what `main.py` and `test_bge.py` do): use the `src.` prefix, e.g. `from src.hipporag import HippoRAG` or `from src.hipporag.HippoRAG import HippoRAG`. Match the style already used in the file you're editing.
+- After `pip install hipporag` (or `pip install -e .`): `from hipporag import HippoRAG`. **Everything under `tests/` uses this style** and requires the installed package.
+- Running from a raw clone **without** install — only `main.py` does this now: use the `src.` prefix, e.g. `from src.hipporag import HippoRAG` or `from src.hipporag.HippoRAG import HippoRAG`. Match the style already used in the file you're editing.
 
 ## Heavy / Linux-only dependencies
 
-`requirements.txt` and `setup.py` use **lower-bounded `>=` constraints** (e.g. `torch>=2.5`, `vllm>=0.10`, `transformers>=4.45`, `openai>=2.0`) so the benchmark can pick up newer compatible releases. **`vllm` is Linux-only and pulls CUDA**, so `pip install -e .` will fail on macOS/Windows and on GPU-less machines unless you install in two steps (core deps first, skip vllm). Assume a Linux + CUDA + conda environment. The `milvus` vector-store backend is an optional extra: `pip install -e .[milvus]`.
+`requirements.txt` and `setup.py` use **lower-bounded `>=` constraints** (e.g. `torch>=2.5`, `vllm>=0.10`, `transformers>=4.45`, `openai>=2.0`) so the benchmark can pick up newer compatible releases. **`vllm` is Linux-only and pulls CUDA**, so `pip install -e .` will fail on macOS/Windows and on GPU-less machines unless you install in two steps (core deps first, skip vllm). Assume a Linux + CUDA + conda environment. The `milvus` vector-store backend is an optional extra: `pip install -e .[milvus]`. The `dev` extra adds the pytest runner: `pip install -e .[dev]`.
 
 ## Entry points
 
@@ -60,6 +66,41 @@ Class selection is driven by **string matching on the model name**, not explicit
 - OpenIE mode (`BaseConfig.openie_mode`): `online` (default), `offline` (vLLM batch), or `Transformers-offline`.
 
 When adding a model, update the relevant `__init__.py` getter; there is no registry.
+
+## Two LLMs: indexing vs inference
+
+`HippoRAG.__init__` accepts `extraction_llm` (used by `OpenIE` for offline indexing) and `qa_llm` (used by `DSPyFilter` for retrieval-augmented QA), in addition to the unified `llm` parameter. When `extraction_llm`/`qa_llm` are `None`, they default to `self.llm` (same model for both stages).
+
+**Two-stage workflow** (for using different models across indexing vs query):
+```sh
+python -m hipporag.HippoRAG --phase index --model_name <indexing_llm>
+python -m hipporag.HippoRAG --phase query --model_name <query_llm>
+```
+
+**In a single run** (same model, Python API):
+```python
+hippo = HippoRAG(llm_model_name="gpt-4o-mini", ...)  # llm used for both stages
+```
+
+**Two models in one run** (Python API, offline index):
+```python
+hippo = HippoRAG(
+    extraction_llm=TransformersLLM("meta-llama/Llama-3.3-70B-Instruct"),
+    qa_llm=CacheOpenAI("gpt-4o-mini"),
+    ...
+)
+```
+
+### `information_extraction_model_name` — NOT a model name
+
+`information_extraction_model_name` is a **class selector** (`Literal["openie_openai_gpt"]`), not a model name. It selects the OpenIE implementation at index 291 of `HippoRAG.__init__`:
+
+```python
+openie_model_name = self.global_config.information_extraction_model_name.split('_')[-1]
+openie_class = openie_map.get(openie_model_name, None)
+```
+
+`TransformersOffline` (`src/hipporag/information_extraction/openie_transformers_offline.py:43`) reads `global_config.llm_name`, not `information_extraction_model_name`, to determine which model to load. Setting `information_extraction_model_name="transformers_offline"` will raise `NotImplementedError` (see `openie_map.get('offline', None)` → no entry in `openie_map`).
 
 ## Two-stage offline indexing workflow
 
