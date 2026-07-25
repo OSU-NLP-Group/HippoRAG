@@ -90,8 +90,9 @@ class TransformersLLM(BaseLLM):
         self.cache = LLM_Cache(
             os.path.join(global_config.save_dir, "llm_cache"),
             self.llm_name.replace('/', '_'))
-        self.model = AutoModelForCausalLM.from_pretrained(self.global_config.llm_name, device_map='auto', torch_dtype = torch.bfloat16)
-        self.tokenizer = AutoTokenizer.from_pretrained(self.global_config.llm_name)
+        self.model_id = self.global_config.llm_name.removeprefix("Transformers/")
+        self.model = AutoModelForCausalLM.from_pretrained(self.model_id, device_map="auto", torch_dtype=torch.bfloat16)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
 
         self.retry = 5
         
@@ -99,7 +100,7 @@ class TransformersLLM(BaseLLM):
 
     def _init_llm_config(self) -> None:
         config_dict = self.global_config.__dict__
-        config_dict['llm_name'] = self.global_config.llm_name[len("Transformers/"):]
+        config_dict['llm_name'] = self.global_config.llm_name.removeprefix("Transformers/")
         config_dict['generate_params'] = {
                 "n": 1,
                 "temperature": config_dict.get("temperature", 0.0),
@@ -117,7 +118,7 @@ class TransformersLLM(BaseLLM):
         params = deepcopy(self.llm_config.generate_params)
         if kwargs:
             params.update(kwargs)
-        params["model"] = self.global_config.llm_name
+        params["model"] = self.model_id
         params["messages"] = messages
         params["prompt_text"] = convert_text_chat_messages_to_input_ids(messages, self.tokenizer)
         

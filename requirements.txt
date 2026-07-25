@@ -18,3 +18,4 @@ boto3
 pyarrow
 pandas
 outlines>=1.0
+requests

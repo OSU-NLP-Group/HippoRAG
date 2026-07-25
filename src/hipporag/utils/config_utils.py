@@ -62,6 +62,18 @@ class BaseConfig:
         default_factory=lambda: { "type": "json_object" },
         metadata={"help": "Specifying the format that the model must output."}
     )
+    bedrock_mantle_auth: Literal["api_key", "aws_credentials"] = field(
+        default="api_key",
+        metadata={"help": "Authentication method for the Amazon Bedrock Mantle endpoint."}
+    )
+    bedrock_aws_profile: Optional[str] = field(
+        default=None,
+        metadata={"help": "AWS profile used when Bedrock Mantle authentication is aws_credentials."}
+    )
+    bedrock_region: Optional[str] = field(
+        default=None,
+        metadata={"help": "AWS region used to sign Bedrock Mantle requests."}
+    )
     
     ## LLM specific attributes -> Async hyperparameters
     max_retry_attempts: int = field(
@@ -214,12 +226,13 @@ class BaseConfig:
     )
 
     # Vector store backend
-    vector_store_type: Literal["parquet", "qdrant", "chroma"] = field(
+    vector_store_type: Literal["parquet", "qdrant", "chroma", "milvus"] = field(
         default="parquet",
         metadata={"help": "Which embedding store backend to use. "
                   "'parquet' (default) stores embeddings in local Parquet files. "
                   "'qdrant' uses a Qdrant vector database (local file or remote). "
-                  "'chroma' uses a ChromaDB collection (local file or remote HTTP)."}
+                  "'chroma' uses a ChromaDB collection (local file or remote HTTP). "
+                  "'milvus' uses Milvus Lite, Milvus server, or Zilliz Cloud."}
     )
 
     # Qdrant-specific settings (only used when vector_store_type='qdrant')
@@ -242,6 +255,26 @@ class BaseConfig:
     chroma_port: int = field(
         default=8000,
         metadata={"help": "Port of the remote ChromaDB HTTP server."}
+    )
+
+    # Milvus-specific settings (only used when vector_store_type='milvus')
+    milvus_uri: Optional[str] = field(
+        default=None,
+        metadata={"help": "Milvus URI. If None, MILVUS_URI is used when set; otherwise "
+                  "a local Milvus Lite database is created inside save_dir."}
+    )
+    milvus_token: Optional[str] = field(
+        default=None,
+        metadata={"help": "Milvus or Zilliz Cloud token. If None, MILVUS_TOKEN is used when set."}
+    )
+    milvus_db_name: Optional[str] = field(
+        default=None,
+        metadata={"help": "Milvus database name. If None, MILVUS_DB_NAME is used when set."}
+    )
+    milvus_consistency_level: Optional[Literal["Strong", "Session", "Bounded", "Eventually"]] = field(
+        default=None,
+        metadata={"help": "Milvus consistency level. If None, MILVUS_CONSISTENCY_LEVEL is used "
+                  "when set; otherwise the Milvus client default is used."}
     )
     
     

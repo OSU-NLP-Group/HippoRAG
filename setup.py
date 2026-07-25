@@ -38,5 +38,9 @@ setuptools.setup(
         "pyarrow",
         "pandas",
         "outlines>=1.0",
-    ]
+        "requests",
+    ],
+    extras_require={
+        "milvus": ["pymilvus[milvus_lite]>=2.4.2"],
+    },
 )

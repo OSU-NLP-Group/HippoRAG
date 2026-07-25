@@ -7,11 +7,11 @@ Requires:
 Supports both local (persistent file) and remote (HTTP) ChromaDB:
 
     # Local — no server needed
-    HippoRAG(..., vector_store_type="chroma")
+    HippoRAG(global_config=BaseConfig(vector_store_type="chroma"))
 
     # Remote
-    HippoRAG(..., vector_store_type="chroma",
-              chroma_host="localhost", chroma_port=8000)
+    HippoRAG(global_config=BaseConfig(vector_store_type="chroma",
+                                     chroma_host="localhost", chroma_port=8000))
 """
 from __future__ import annotations
 

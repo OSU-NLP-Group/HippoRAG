@@ -30,4 +30,4 @@ def _get_embedding_model_class(embedding_model_name: str = "nvidia/NV-Embed-v2")
         return VLLMEmbeddingModel
     elif "bge" in embedding_model_name.lower():
         return BGEEmbeddingModel
-    assert False, f"Unknown embedding model name: {embedding_model_name}"
+    raise ValueError(f"Unknown embedding model name: {embedding_model_name}")

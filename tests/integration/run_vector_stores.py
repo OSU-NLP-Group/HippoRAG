@@ -1,16 +1,17 @@
 """
-Tests for vector store backends (Parquet, Qdrant, ChromaDB).
+Tests for vector store backends (Parquet, Qdrant, ChromaDB, Milvus).
 
 No OpenAI key or GPU required -- a deterministic MockEmbeddingModel is used.
 
 Usage
 -----
 # All backends (skip Qdrant/Chroma if packages not installed)
-python tests_vector_stores.py
+python tests/integration/run_vector_stores.py
 
 # Install optional backends first:
 pip install qdrant-client   # for Qdrant tests
 pip install chromadb        # for Chroma tests
+pip install "pymilvus[milvus_lite]"  # for Milvus Lite tests
 """
 
 import os
@@ -159,7 +160,7 @@ def _test_persistence(make_store, label: str):
 # ---------------------------------------------------------------------------
 
 def test_parquet(tmp_dir: str):
-    from src.hipporag.embedding_store import EmbeddingStore
+    from hipporag.embedding_store import EmbeddingStore
 
     label = "Parquet"
     print(f"\n{'='*55}")
@@ -182,7 +183,7 @@ def test_qdrant(tmp_dir: str):
         print("\n  [SKIP] Qdrant -- qdrant-client not installed  (pip install qdrant-client)")
         return
 
-    from src.hipporag.vector_stores.qdrant_store import QdrantEmbeddingStore
+    from hipporag.vector_stores.qdrant_store import QdrantEmbeddingStore
 
     label = "Qdrant (local)"
     print(f"\n{'='*55}")
@@ -211,7 +212,7 @@ def test_chroma(tmp_dir: str):
         print("\n  [SKIP] ChromaDB -- chromadb not installed  (pip install chromadb)")
         return
 
-    from src.hipporag.vector_stores.chroma_store import ChromaEmbeddingStore
+    from hipporag.vector_stores.chroma_store import ChromaEmbeddingStore
 
     label = "ChromaDB (local)"
     print(f"\n{'='*55}")
@@ -235,9 +236,46 @@ def test_chroma(tmp_dir: str):
     print(f"\n  PASS: {label} -- all tests passed")
 
 
+def test_milvus(tmp_dir: str):
+    if importlib.util.find_spec("pymilvus") is None:
+        print('\n  [SKIP] Milvus -- pymilvus not installed  (pip install "pymilvus[milvus_lite]")')
+        return
+
+    from hipporag.vector_stores.milvus_store import MilvusEmbeddingStore
+
+    label = "Milvus Lite (local)"
+    print(f"\n{'='*55}")
+    print(f"  Backend: {label}")
+    print(f"{'='*55}")
+
+    db_path = os.path.join(tmp_dir, "milvus", "chunk_embeddings")
+
+    class _FakeConfig:
+        milvus_uri = None  # use local Milvus Lite mode
+        milvus_token = None
+        milvus_db_name = None
+        milvus_consistency_level = "Session"
+
+    cfg = _FakeConfig()
+    try:
+        store = MilvusEmbeddingStore(EMBEDDING_MODEL, db_path, batch_size=16, namespace="chunk", global_config=cfg)
+    except ImportError as exc:
+        print(f'\n  [SKIP] Milvus -- {exc}  (pip install "pymilvus[milvus_lite]")')
+        return
+
+    _run_store_tests(store, label)
+    store.close()
+
+    def make_store():
+        return MilvusEmbeddingStore(EMBEDDING_MODEL, db_path, batch_size=16, namespace="chunk", global_config=cfg)
+
+    _test_persistence(make_store, label)
+    print(f"\n  PASS: {label} -- all tests passed")
+
+
 def test_factory(tmp_dir: str):
     """Verify get_embedding_store() returns the right class for each type."""
-    from src.hipporag.embedding_store import get_embedding_store, EmbeddingStore, BaseEmbeddingStore
+    from hipporag.embedding_store import get_embedding_store, EmbeddingStore, BaseEmbeddingStore
 
     print(f"\n{'='*55}")
     print("  Factory: get_embedding_store()")
@@ -248,6 +286,10 @@ def test_factory(tmp_dir: str):
         qdrant_url = None
         chroma_host = None
         chroma_port = 8000
+        milvus_uri = None
+        milvus_token = None
+        milvus_db_name = None
+        milvus_consistency_level = "Session"
 
     cfg = _Config()
     store = get_embedding_store(EMBEDDING_MODEL, os.path.join(tmp_dir, "factory"), 16, "chunk", cfg)
@@ -256,18 +298,30 @@ def test_factory(tmp_dir: str):
     print("  [1] parquet -> EmbeddingStore  OK")
 
     if importlib.util.find_spec("qdrant_client"):
-        from src.hipporag.vector_stores.qdrant_store import QdrantEmbeddingStore
+        from hipporag.vector_stores.qdrant_store import QdrantEmbeddingStore
         cfg.vector_store_type = "qdrant"
         store = get_embedding_store(EMBEDDING_MODEL, os.path.join(tmp_dir, "factory_qdrant"), 16, "chunk", cfg)
         assert isinstance(store, QdrantEmbeddingStore)
         print("  [2] qdrant  -> QdrantEmbeddingStore  OK")
 
     if importlib.util.find_spec("chromadb"):
-        from src.hipporag.vector_stores.chroma_store import ChromaEmbeddingStore
+        from hipporag.vector_stores.chroma_store import ChromaEmbeddingStore
         cfg.vector_store_type = "chroma"
         store = get_embedding_store(EMBEDDING_MODEL, os.path.join(tmp_dir, "factory_chroma"), 16, "chunk", cfg)
         assert isinstance(store, ChromaEmbeddingStore)
         print("  [3] chroma  -> ChromaEmbeddingStore  OK")
+
+    if importlib.util.find_spec("pymilvus"):
+        from hipporag.vector_stores.milvus_store import MilvusEmbeddingStore
+        cfg.vector_store_type = "milvus"
+        try:
+            store = get_embedding_store(EMBEDDING_MODEL, os.path.join(tmp_dir, "factory_milvus"), 16, "chunk", cfg)
+        except ImportError as exc:
+            print(f'  [4] milvus  -> SKIP ({exc})')
+        else:
+            assert isinstance(store, MilvusEmbeddingStore)
+            store.close()
+            print("  [4] milvus  -> MilvusEmbeddingStore  OK")
 
     print(f"\n  PASS: Factory -- all checks passed")
 
@@ -289,6 +343,7 @@ def main():
         ("Parquet", test_parquet),
         ("Qdrant", test_qdrant),
         ("ChromaDB", test_chroma),
+        ("Milvus", test_milvus),
         ("Factory", test_factory),
     ]:
         try:

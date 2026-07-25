@@ -244,8 +244,11 @@ def get_embedding_store(
     elif store_type == "chroma":
         from .vector_stores.chroma_store import ChromaEmbeddingStore
         return ChromaEmbeddingStore(embedding_model, db_path, batch_size, namespace, global_config)
+    elif store_type == "milvus":
+        from .vector_stores.milvus_store import MilvusEmbeddingStore
+        return MilvusEmbeddingStore(embedding_model, db_path, batch_size, namespace, global_config)
     else:
         raise ValueError(
             f"Unknown vector_store_type: '{store_type}'. "
-            f"Choose from 'parquet', 'qdrant', or 'chroma'."
+            f"Choose from 'parquet', 'qdrant', 'chroma', or 'milvus'."
         )

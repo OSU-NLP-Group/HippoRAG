@@ -73,13 +73,13 @@ def test_dispatch():
     assert _get_embedding_model_class("VLLM/BAAI/bge-m3").__name__ == "VLLMEmbeddingModel"
     print("OK")
 
-    print("  [6] Unknown model name still raises AssertionError ...", end=" ")
+    print("  [6] Unknown model name still raises ValueError ...", end=" ")
     try:
         _get_embedding_model_class("definitely-not-a-real-model")
-    except AssertionError:
+    except ValueError:
         print("OK")
     else:
-        raise AssertionError("Expected AssertionError for an unknown embedding model name")
+        raise AssertionError("Expected ValueError for an unknown embedding model name")
 
     print("\n  PASS: dispatch -- all checks passed")
 
