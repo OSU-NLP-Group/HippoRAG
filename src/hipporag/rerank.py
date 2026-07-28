@@ -122,7 +122,7 @@ class DSPyFilter:
         for generated_fact in generated_facts:
             closest_matched_fact = difflib.get_close_matches(str(generated_fact), [str(i) for i in candidate_items], n=1, cutoff=0.0)[0]
             try:
-                result_indices.append(candidate_items.index(eval(closest_matched_fact)))
+                result_indices.append(candidate_items.index(ast.literal_eval(closest_matched_fact)))
             except Exception as e:
                 print('result_indices exception', e)
 
