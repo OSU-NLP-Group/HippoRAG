@@ -1,0 +1,111 @@
+extends: gemma4_e2b_whole_repo_common.yaml
+
+# One question-independent adapter is generated from the complete canonical
+# 130k snapshot. Four separately budgeted QA packs supervise that same adapter.
+repo_merge_method: concat
+use_flash_attn: false
+ctx_encoder_model_name_or_path: google/gemma-4-E2B-it
+model_revision: 3e22461f65e89153144f8adb70e3b8c2cc9845a7
+ctx_encoder_revision: 3e22461f65e89153144f8adb70e3b8c2cc9845a7
+use_kl_loss: false
+gen_lora_l1_reg_coef: 0.1
+use_per_ctx_average_loss: true
+average_tokens_across_devices: true
+wrong_repo_contrastive_coef: 0.1
+wrong_repo_contrastive_margin: 0.5
+wrong_repo_contrastive_pack_fraction: 0.25
+
+repoqa_lazy_frozen_chunks: false
+repoqa_ce_streaming: true
+repoqa_stage: stage1
+repoqa_qa_token_budget: 8192
+repoqa_validation_panel: fast
+repoqa_chunk_cache_mb: 256
+max_qas_per_sample: null
+max_qas_len: 131072
+max_packed_inp_len: 131072
+
+# Variable K remains eager. Context checkpointing and sequential aggregation
+# are required for K=4 at the 130k resolution.
+compile_hypernet: false
+compile_base_model: false
+ctx_chunk_microbatch_size: 1
+# The complete-chunk checkpoint predates the per-layer CPU staging path below.
+# Nesting it around the 20 activation-checkpointed Perceiver calls makes the
+# backward recomputation retain each layer's temporary 130k GPU copy until the
+# whole chunk has been rebuilt.  The inner per-layer checkpoints already
+# preserve exact gradients while retaining only CPU inputs, so the outer
+# checkpoint is both redundant and substantially raises the backward peak.
+checkpoint_ctx_to_lora_chunks: false
+sequential_ctx_layer_aggregation: true
+# Eager Perceiver attention repeats grouped K/V heads and materializes the
+# probability tensor for every 130k-token cross-attention. SDPA/GQA preserves
+# the context-plus-latents attention computation without those peak tensors.
+perceiver_attn_implementation: sdpa
+# The outer per-selected-layer checkpoint avoids retaining the full Perceiver
+# between layers, but its backward recomputation otherwise reconstructs all
+# nine long-context blocks at once. Checkpoint each block and the modality
+# projection so only one block's activations are live at a time.
+perceiver_activation_checkpointing: true
+# The input projection is also token-wise. Independent checkpoint regions keep
+# its long-context gate/up intermediates bounded during Perceiver backward.
+perceiver_modality_projection_chunk_size: 2048
+# A 130k context has roughly 8 GiB of selected bf16 layer inputs. Keeping all
+# 20 on the GPU left no room for the backward recomputation on some production
+# samples. Stage the frozen inputs in host RAM and move one layer at a time
+# inside the activation-checkpointed Perceiver call; no data or loss changes.
+offload_ctx_layer_inputs_to_cpu: true
+# Gemma 4's MLP is token-wise. Evaluating it over the complete longest chunk
+# materializes multi-GiB gate/up intermediates even though context encoding is
+# frozen. Chunk only this position-wise sublayer; global FlexAttention and all
+# 130k context tokens remain unchanged.
+ctx_encoder_mlp_chunk_size: 2048
+# Frozen attention has no dependency across query rows. Keep the full K/V
+# sequence and exact causal/sliding mask while bounding only the FlexAttention
+# query grid and its output/workspace temporaries.
+ctx_encoder_flex_query_chunk_size: 4096
+# Adam's two fp32 moment tensors are unused until after backward. Stage them on
+# CPU during the full snapshot forward/backward step, then restore immediately
+# before gradient clipping and the optimizer update.
+offload_optimizer_state_during_context: true
+# Return allocator high-water blocks after every variable-length repository.
+# This does not change live tensors or the objective, but keeps one long sample
+# from reducing the headroom available to the next rank-local sample.
+torch_empty_cache_steps: 1
+
+dataloader_num_workers: 0
+dataloader_prefetch_factor: null
+dataloader_persistent_workers: false
+per_device_train_batch_size: 1
+per_device_eval_batch_size: 1
+# One rank consumes one snapshot and all four QA packs per step. Across eight
+# ranks this is already an eight-snapshot optimizer batch.
+gradient_accumulation_steps: 1
+ignore_data_skip: false
+# RepoQACEStreamingDataset performs deterministic rank-strided assignment and
+# pads the final global round itself. Accelerate otherwise defaults to
+# dispatching IterableDataset batches from rank 0 and would split our
+# per-rank batch of one into empty tensors on the remaining ranks.
+accelerator_config:
+  split_batches: false
+  dispatch_batches: false
+  even_batches: false
+
+eval_strategy: steps
+eval_on_start: true
+eval_steps: 100
+logging_steps: 5
+save_strategy: steps
+# Infrastructure faults must cost at most ten optimizer steps. Retain only the
+# newest three resumable checkpoints to bound FSS storage and metadata traffic.
+save_steps: 10
+save_total_limit: 3
+load_best_model_at_end: false
+
+train_ds_names:
+  - /path/to/ad-local/storage/doc_to_lora_repoqa/snapshot_memory_130k_k4_balanced_v1_20260723/READY.json
+val_ds_names:
+  - /path/to/ad-local/storage/doc_to_lora_repoqa/snapshot_memory_130k_k4_balanced_v1_20260723/READY.json
+output_root: /path/to/ad-local/storage/doc_to_lora_repoqa/snapshot_memory_130k_k4_balanced_runs
+# The stage launch wrapper replaces this with the exact one-pass ceiling.
+max_steps: 2000

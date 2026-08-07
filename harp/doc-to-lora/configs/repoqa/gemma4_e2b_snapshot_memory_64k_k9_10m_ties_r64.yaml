@@ -1,0 +1,12 @@
+extends: gemma4_e2b_snapshot_memory_64k_k9_10m.yaml
+
+# Direct TIES is the only scientific difference from the exact-10M rank-concat
+# control. It merges complete dense B @ A chunk updates with the reference
+# recipe, then performs one rank-64 reconstruction and appends the learned
+# rank-8 Doc-to-LoRA bias exactly once.
+repo_merge_method: ties
+repo_output_rank: 64
+ties_keep_fraction: 0.2
+ties_sign_method: sum
+ties_merge_type: mean
+ties_merge_scale: 1.0

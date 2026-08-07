@@ -1,0 +1,43 @@
+{
+  "facts": 104,
+  "family_counts": {
+    "behavior_test_spec": 26,
+    "cross_file_relationships": 46,
+    "imports_exports_entrypoints": 32
+  },
+  "format": "swefixer_targeted_retrieval_subset_v1",
+  "input_jsonl": "memory_discovery.jsonl",
+  "input_sha256": "756b5535fee822104fd36dc60176c02ec02150c72412489aaf48c4d6061cdcb2",
+  "output_jsonl": "benchmarks/repoqa_104/swefixer_targeted_retrieval_104.jsonl",
+  "output_sha256": "d73739eaa2fed11b4d9c700776c10784cf82be63f6fed095a164b1dcc4f0e6c3",
+  "per_repository": {
+    "Kinto/kinto": 4,
+    "Lightning-Universe/lightning-bolts": 4,
+    "OpenMined/PySyft": 4,
+    "SciTools/cartopy": 4,
+    "Textualize/textual": 4,
+    "adamchainz/django-cors-headers": 4,
+    "archlinux/archinstall": 4,
+    "aws/sagemaker-python-sdk": 4,
+    "certbot/certbot": 4,
+    "cloud-custodian/cloud-custodian": 4,
+    "dask/dask": 4,
+    "deepset-ai/haystack": 4,
+    "django/channels": 4,
+    "e-valuation/EvaP": 4,
+    "elastic/helm-charts": 4,
+    "fineanmol/Hacktoberfest2023": 4,
+    "gammapy/gammapy": 4,
+    "modin-project/modin": 4,
+    "mozmeao/basket": 4,
+    "netket/netket": 4,
+    "raspiblitz/raspiblitz": 4,
+    "sherlock-project/sherlock": 4,
+    "sparcs-kaist/otlplus": 4,
+    "tornadoweb/tornado": 4,
+    "wemake-services/wemake-django-template": 4,
+    "weni-ai/bothub-engine": 4
+  },
+  "repositories": 26,
+  "seed": "swefixer-targeted-retrieval-step500-v1"
+}

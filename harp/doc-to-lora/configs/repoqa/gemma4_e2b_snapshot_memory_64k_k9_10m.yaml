@@ -1,0 +1,21 @@
+extends: gemma4_e2b_snapshot_memory_130k_k4_balanced.yaml
+
+# Complete 64K snapshots with K<=9. Stage 1 uses K<=2; Stage 2A uses K=3..9.
+# The immutable READY manifest freezes the exact 10M QA selection, cost-bucketed
+# DDP order, and AST=1.0 / LLM=1.8 answer-loss coefficients.
+max_ctx_len: 65536
+max_ctx_chunk_len: 65536
+max_qas_len: 131072
+max_packed_inp_len: 131072
+repoqa_qa_token_budget: 16384
+
+train_ds_names:
+  - /path/to/ad-local/storage/doc_to_lora_repoqa/snapshot_memory_64k_k9_10m_v1_20260724/READY.json
+val_ds_names:
+  - /path/to/ad-local/storage/doc_to_lora_repoqa/snapshot_memory_64k_k9_10m_v1_20260724/READY.json
+output_root: /path/to/ad-local/storage/doc_to_lora_repoqa/snapshot_memory_64k_k9_10m_runs_v1_20260724
+
+# Checkpoint frequently until the exact production sequence has demonstrated
+# sustained stability beyond the former step-6 OOM.
+save_steps: 5
+save_total_limit: 3

@@ -1,0 +1,13 @@
+extends: gemma4_e2b_snapshot_memory_64k_k9_10m.yaml
+
+# Exact order-independent streaming TIES. Each dense chunk update is trimmed,
+# contributes once to a final sign-count vote and separate positive/negative
+# sums, and is then discardable. The final winning sum is divided by the total
+# repository chunk count, compressed to rank 64, and receives the learned
+# rank-8 Doc-to-LoRA bias exactly once.
+repo_merge_method: streaming_ties_exact
+repo_output_rank: 64
+ties_keep_fraction: 0.2
+ties_sign_method: sum_of_signs
+ties_merge_type: mean
+ties_merge_scale: 1.0

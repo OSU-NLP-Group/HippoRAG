@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "harp-code2lora"
+version = "0.1.0"
+description = "Repository-conditioned Code2LoRA training for HARP"
+requires-python = ">=3.10"
+dependencies = [
+  "datasets",
+  "numpy",
+  "peft",
+  "pyarrow",
+  "torch",
+  "transformers",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+

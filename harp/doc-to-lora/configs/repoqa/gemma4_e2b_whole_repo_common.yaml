@@ -1,0 +1,51 @@
+extends: gemma4_e2b_qa_distill_downproj.yaml
+
+# This checked-in data root is the current CE smoke artifact. It is not the
+# production five-run objective. Production uses a separately prepared corpus
+# of frozen-base-model autoregressive responses with top-16 teacher
+# distributions, sets use_kl_loss=true, and retains L1 regularization at 0.1.
+use_kl_loss: false
+
+# Lightweight stage indexes contain chunk pointers, not duplicated repository
+# text. Dataloader workers hydrate the exact frozen canonical chunks lazily.
+repoqa_lazy_frozen_chunks: true
+repoqa_chunk_cache_mb: 128
+dataloader_num_workers: 4
+dataloader_prefetch_factor: 2
+report_to: []
+
+# Canonical chunks are built upstream from whole files and arrive as a list in
+# repo_contexts. The loader validates them but never re-splits them.
+max_ctx_len: 131072
+max_ctx_chunk_len: 131072
+max_ctx_chunk_num: null
+# This is only the packer's admission ceiling; it does not preallocate this
+# amount. Actual chunks are encoded sequentially via ctx_chunk_microbatch_size.
+max_packed_ctx_len: 268435456
+max_packed_size: 1
+# Computation-only optimization: amortize one expensive repository-context
+# pass over QA triplets sharing the exact chunk selection. Production requires
+# packed-versus-separate logits/loss/gradient equivalence and logical-triplet
+# weighting; the released Doc-to-LoRA scripts use max_qas_per_sample=1.
+max_qas_per_sample: 10
+ctx_chunk_microbatch_size: 1
+checkpoint_ctx_to_lora_chunks: true
+sequential_ctx_layer_aggregation: true
+# Whole-repository concat changes rank with chunk count. Eager execution avoids
+# compiling a distinct, very expensive backward graph for every observed K.
+compile_hypernet: false
+repo_svd_singular_value_epsilon: 1.0e-7
+
+# Placeholder paths: the launcher overrides these independently for each
+# curriculum stage after its index manifest passes readiness checks.
+train_ds_names:
+  - /path/to/ad-local/storage/doc_to_lora_repoqa/enriched_20260721_ce/stage1/train/*.repoqa.parquet
+val_ds_names:
+  - /path/to/ad-local/storage/doc_to_lora_repoqa/enriched_20260721_ce/stage1/val/*.repoqa.parquet
+
+# Placeholder aggregate budget. The wrapper runs Stage 1 independently, then
+# loads only its model weights into a fresh Stage-2 optimizer/scheduler. Stage
+# 2A -> 2B resumes within that new compositional-stage run.
+max_steps: 100000
+save_steps: 5000
+output_root: /path/to/ad-local/storage/doc_to_lora_repoqa/whole_repo_runs

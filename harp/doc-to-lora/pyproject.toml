@@ -1,0 +1,86 @@
+[project]
+name = "ctx-to-lora"
+version = "0.0.1"
+authors = [{ name = "Rujikorn Charakorn" }]
+description = ""
+readme = "README.md"
+requires-python = ">= 3.10"
+dependencies = [
+    "transformers==4.51.3",
+    "deepspeed==0.17.1",
+    "accelerate==1.6.0",
+    "datasets==3.6.0",
+    "setuptools",
+    "peft",
+    "jupyter",
+    "matplotlib",
+    "hf_transfer",
+    "torchmetrics",
+    "inflect",
+    "pre-commit",
+    "tensorboardX",
+    "wandb",
+    "fasttext-wheel",
+    "einops",
+    "jaxtyping",
+    "liger-kernel",
+    "tensorboard",
+    "flask",
+    "gradio>=4.40.0",
+    "pandas",
+    "plotly",
+    "rouge-score",
+    "vllm==0.8.5.post1",
+    "huggingface-hub[hf-transfer]>=0.32.0",
+    "opt-einsum>=3.4.0",
+    "kagglehub[hf-datasets]>=0.3.12",
+    "kaggle>=1.7.4.5",
+    "bitsandbytes>=0.46.1",
+    "google-cloud-storage>=3.2.0",
+    "wonderwords>=2.2.0",
+    "llmlingua>=0.2.2",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pyright]
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    ".venv",
+    ".github",
+    ".vscode",
+    "chat_templates",
+    "eval_results",
+    "configs",
+    "EditingLlama",
+    "icae_v2",
+    "lm-evaluation-harness",
+    "llm-comparator",
+    "LongBench",
+    "scripts",
+    "train_outputs",
+    "./data/",
+    "/data/",
+    "generated_tasks",
+    "outputs",
+    "plots",
+    "tmp",
+    "wandb",
+    ".wandb",
+    ".ruff_cache",
+    "assets",
+]
+typeCheckingMode = "off"
+
+[tool.ruff]
+line-length = 88
+select = ["F401"]   # remove unused imports
+ignore = ["E", "F"]
+
+[tool.isort]
+profile = "black"
+known_local_folder = ["ctx_to_lora"]

@@ -1,0 +1,69 @@
+model_name_or_path: google/gemma-4-E2B-it
+# The answer model sees only the short QA sequence, where SDPA is stable. The
+# separate 130K context encoder is promoted to exact FlexAttention in
+# HyperLoRA._init_model to avoid SDPA's quadratic allocation.
+use_flash_attn: false
+
+# Match the authors' main Doc-to-LoRA recipe.
+lora_r: 8
+lora_dropout: 0.0
+module_name_regex: ^model\.language_model\.layers\.\d+\.
+target_modules:
+  - down_proj
+# Gemma 4 E2B has two down-projection widths. Generate adapters only for the
+# larger MLP shape (20/35 layers), keeping this hypernetwork near 265M params.
+target_module_shapes:
+  - down_proj__in12288__out1536
+
+use_kl_loss: true
+use_per_ctx_average_loss: true
+gen_lora_l1_reg_coef: 0.1
+
+ctx_encoder_type: per_layer_activations
+quantize_ctx_encoder: true
+aggregator_type: perceiver
+n_latent_queries: 8
+num_blocks: 9
+num_self_attn_per_block: 0
+latent_size: 512
+per_rank_gen: true
+per_layer_processing: true
+num_pre_head_layers: 1
+
+max_qas_len: 2048
+max_qas_per_sample: 1
+max_ctx_chunk_len: 4096
+max_ctx_chunk_num: 1
+max_packed_inp_len: 4096
+max_packed_ctx_len: 4096
+max_packed_size: 1
+
+train_ds_names:
+  - /path/to/ad-local/storage/doc_to_lora_repoqa/distilled/train/*.parquet
+val_ds_names:
+  - /path/to/ad-local/storage/doc_to_lora_repoqa/distilled/val/*.parquet
+max_val_samples_per_ds: 200
+
+# Four GPUs x batch 1 x accumulation 8 x 96,125 steps presents the
+# 3.076M-row QA corpus approximately once without occupying all 8 team GPUs.
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+max_steps: 96125
+learning_rate: 4.0e-5
+weight_decay: 0.01
+warmup_steps: 100
+eval_strategy: steps
+eval_steps: 1000
+per_device_eval_batch_size: 1
+prediction_loss_only: true
+save_steps: 5000
+save_total_limit: 2
+# ModulatedPretrainedModel checkpoints intentionally include reconstruction
+# metadata (base model path and hypernetwork/context configs) alongside tensors.
+# They must use torch's pytorch_model.bin format, as in the original Doc-to-LoRA.
+save_safetensors: false
+logging_steps: 25
+bf16: true
+tf32: true
+gradient_checkpointing: true
+output_root: /path/to/ad-local/storage/doc_to_lora_repoqa/runs

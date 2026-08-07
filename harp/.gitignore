@@ -1,0 +1,42 @@
+# Python and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environments and model caches
+.venv/
+venv/
+.env
+.wandb/
+wandb/
+*.egg-info/
+
+# Runtime artifacts
+outputs/
+runs/
+logs/
+scratch/
+*.log
+*.out
+*.err
+
+# Generated data and evaluation artifacts
+/data/
+/datasets/
+/checkpoints/
+predictions*.jsonl
+retrieval*.jsonl
+events.jsonl
+summary.json
+*.parquet
+*.arrow
+*.safetensors
+*.csv
+*.html
+*.svg
+*.png
+*.pdf
