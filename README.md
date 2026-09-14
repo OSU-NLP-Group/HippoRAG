@@ -179,6 +179,27 @@ hipporag = HippoRAG(
 
 Model names use the `vendor/model` namespace (for example `orcarouter/anthropic/claude-opus-4.8` or `orcarouter/google/gemini-2.5-flash`), and `orcarouter/auto` lets the router pick a live model automatically. HippoRAG uses the default OrcaRouter endpoint `https://api.orcarouter.ai/v1`; set `llm_base_url` explicitly to override it.
 
+### Atlas Cloud
+
+Atlas Cloud is an OpenAI-compatible AI gateway that routes HippoRAG's requests across models from OpenAI, Anthropic, Google Gemini, DeepSeek, Qwen, Moonshot, and more through a single endpoint. Prefix the Atlas Cloud model ID with `atlascloud/` to use it as a named provider, as shown in `examples/demo_atlascloud.py`:
+
+```sh
+export ATLASCLOUD_API_KEY=<your Atlas Cloud API key>
+python examples/demo_atlascloud.py
+```
+
+The corresponding configuration is:
+
+```python
+hipporag = HippoRAG(
+    save_dir='outputs/atlascloud',
+    llm_model_name='atlascloud/deepseek-ai/deepseek-v3.2',
+    embedding_model_name=embedding_model_name,
+)
+```
+
+Model names use the `vendor/model` namespace (for example `atlascloud/deepseek-ai/deepseek-v3.2` or `atlascloud/openai/gpt-4.1-mini`); `GET /v1/models` on the gateway lists what is currently routable. HippoRAG uses the default Atlas Cloud endpoint `https://api.atlascloud.ai/v1`; set `llm_base_url` explicitly to override it.
+
 ### Local Deployment (vLLM)
 
 This simple example will illustrate how to use `hipporag` with any vLLM-compatible locally deployed LLM.
@@ -285,6 +306,7 @@ Provider integration scripts exercise indexing, graph reload, incremental update
 | OpenAI | `python tests/integration/run_openai.py` |
 | Azure OpenAI | `python tests/integration/run_azure.py --azure_endpoint <resource-url> --azure_api_version <version> --azure_embedding_endpoint <resource-url>` |
 | OrcaRouter | `python tests/integration/run_orcarouter.py` |
+| Atlas Cloud | `python tests/integration/run_atlascloud.py` |
 | Local vLLM | `python tests/integration/run_local.py` |
 | Transformers | `python tests/integration/run_transformers.py` |
 
