@@ -194,20 +194,19 @@ conda activate hipporag  # vllm should be in this environment
 vllm serve meta-llama/Llama-3.3-70B-Instruct --tensor-parallel-size 2 --max_model_len 4096 --gpu-memory-utilization 0.95 
 ```
 
-2. Now you can use very similar code to the one above to use `hipporag`: 
+2. Point `hipporag` at the server. The model name must match the one passed to `vllm serve`; see [OpenAI-compatible endpoints](#openai-compatible-endpoints) for API keys and other options, and [`examples/demo_local.py`](examples/demo_local.py) for a runnable version:
 
 ```python
-save_dir = 'outputs'# Define save directory for HippoRAG objects (each LLM/Embedding model combination will create a new subdirectory)
-llm_model_name = # Any OpenAI model name
-embedding_model_name = # Embedding model name (NV-Embed, GritLM or Contriever for now)
-llm_base_url= # Base url for your deployed LLM (i.e. http://localhost:8000/v1)
+from hipporag import HippoRAG
 
-hipporag = HippoRAG(save_dir=save_dir,
-                    llm_model_name=llm_model,
-                    embedding_model_name=embedding_model_name,
-                    llm_base_url=llm_base_url)
+hipporag = HippoRAG(
+    save_dir="outputs",  # each LLM/embedding model combination gets its own subdirectory
+    llm_model_name="meta-llama/Llama-3.3-70B-Instruct",
+    llm_base_url="http://localhost:8000/v1",
+    embedding_model_name="nvidia/NV-Embed-v2",  # or another supported embedding model, e.g. GritLM/GritLM-7B
+)
 
-# Same Indexing, Retrieval and QA as running OpenAI models above
+# Same indexing, retrieval and QA as with OpenAI models above
 ```
 
 ## Vector Store Backends

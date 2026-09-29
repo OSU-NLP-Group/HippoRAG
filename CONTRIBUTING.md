@@ -9,8 +9,8 @@ We are happy to welcome contributions from the community to help us improve our 
 2. Create a new branch for your contribution: `git checkout -b my-contribution`.
 3. Make your changes and ensure that the code passes our test scripts. More information can be found in the `Testing` section of our `README.md`. 
 4. Commit your changes: `git commit -m "Add my contribution"`.
-6. Push your changes to your forked repository: `git push origin my-contribution`.
-7. Open a pull request to the main repository.
+5. Push your changes to your forked repository: `git push origin my-contribution`.
+6. Open a pull request to the main repository.
 
 ## Before you start, file an issue
 
