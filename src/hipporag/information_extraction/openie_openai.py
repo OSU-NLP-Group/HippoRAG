@@ -44,12 +44,39 @@ def _extract_json_list_field(response: str, field_name: str) -> List:
     raise ValueError(f"OpenIE response does not contain a valid JSON object with {field_name!r}.")
 
 
+def _parse_bare_json_string_list(response: str):
+    """Return the response as a list of strings if it is exactly one JSON array of strings, else None."""
+    text = response.strip()
+    if text.startswith("```") and text.endswith("```"):
+        text = text[3:-3]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, list) or not all(isinstance(item, str) for item in payload):
+        return None
+    return payload
+
+
 def _extract_ner_from_response(real_response):
-    return _extract_json_list_field(real_response, "named_entities")
+    # The one-shot example is an object so the prompt also works with OpenAI JSON mode, but the
+    # system prompt asks for "a JSON list", which newer open models follow literally.
+    try:
+        return _extract_json_list_field(real_response, "named_entities")
+    except ValueError as object_error:
+        entities = _parse_bare_json_string_list(real_response)
+        if entities is None:
+            raise ValueError(
+                f"{object_error} Expected {{\"named_entities\": [...]}} or a bare JSON list of entity strings."
+            ) from None
+        return entities
 
 
 class OpenIE:
-    def __init__(self, llm_model: CacheOpenAI, max_workers: int = 8, ner_max_tokens: int = 512, triple_max_tokens: int = 2048):
+    def __init__(self, llm_model: CacheOpenAI, max_workers: int = 8, ner_max_tokens: int = 2048, triple_max_tokens: int = 4096):
         # Init prompt template manager
         if max_workers < 1:
             raise ValueError("max_workers must be at least 1.")

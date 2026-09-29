@@ -35,6 +35,12 @@ If no existing item describes your issue/feature, great - please file a new issu
  
 Provide as much detail as possible to help us understand and address the problem.
 
+## Adding LLM providers and gateways
+
+HippoRAG already supports any OpenAI-compatible endpoint through `llm_base_url` and `llm_api_key_env` (and `embedding_base_url` / `embedding_api_key_env` for embeddings). Please do not open pull requests that add a dedicated provider class, model-name prefix, README section, or example for an individual OpenAI-compatible gateway, router, or reseller; such pull requests will be closed. If your gateway works with the generic configuration, it is already supported.
+
+A new provider is considered only when the generic path cannot express it, for example a different wire protocol or an authentication scheme the OpenAI SDK cannot send. Please file an issue first describing what the generic configuration cannot do. The existing `orcarouter/` and `atlascloud/` prefixes are kept for compatibility and are not a precedent.
+
 ---
 
 ### Credits

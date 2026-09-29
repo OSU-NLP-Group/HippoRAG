@@ -6,7 +6,7 @@ from openai import AzureOpenAI, DefaultHttpxClient, OpenAI
 
 from ..utils.config_utils import BaseConfig
 from ..utils.logging_utils import get_logger
-from ..utils.openai_utils import local_openai_api_key, resolve_azure_openai_settings, validate_openai_base_url
+from ..utils.openai_utils import resolve_azure_openai_settings, resolve_openai_api_key, validate_openai_base_url
 from .base import BaseEmbeddingModel, EmbeddingConfig
 
 logger = get_logger(__name__)
@@ -31,7 +31,7 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
             if self.global_config.azure_embedding_endpoint is None:
                 base_url = validate_openai_base_url(self.global_config.embedding_base_url, "embeddings", "embedding_base_url")
                 self.client = OpenAI(
-                    api_key=local_openai_api_key(base_url),
+                    api_key=resolve_openai_api_key(base_url, self.global_config.embedding_api_key_env, "embedding_api_key_env"),
                     base_url=base_url,
                     http_client=client,
                     max_retries=self.global_config.max_retry_attempts,
@@ -45,6 +45,7 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
                 )
                 self.request_model_name = settings.deployment or self.embedding_model_name
                 self.client = AzureOpenAI(
+                    api_key=resolve_openai_api_key(None, self.global_config.embedding_api_key_env, "embedding_api_key_env"),
                     api_version=settings.api_version,
                     azure_endpoint=settings.endpoint,
                     azure_deployment=settings.deployment,

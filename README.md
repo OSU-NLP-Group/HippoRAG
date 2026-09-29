@@ -87,7 +87,7 @@ PYTHONPATH=src python -m unittest tests.test_openai_sdk_compat
 
 ### Upgrading existing indexes
 
-Version 2.0.0a5 binds persisted vectors and OpenIE state to the endpoint, deployment, model, normalization, and component identity that produced them. Existing indexes without an `index_manifest.json`, or indexes whose identity no longer matches the active configuration, are rejected rather than mixed silently. Re-index into a fresh `save_dir`; copying or fabricating only the manifest is not a safe migration. When injecting a custom embedding model, extraction LLM, or text preprocessor, set `index_identity` to a stable version string so configuration changes cannot reuse incompatible state.
+Version 2.0.0a5 binds persisted vectors and OpenIE state to the endpoint, deployment, model, normalization, and component identity that produced them. Existing indexes without an `index_manifest.json`, or indexes whose identity no longer matches the active configuration, are rejected rather than mixed silently. Re-index into a fresh `save_dir`; copying or fabricating only the manifest is not a safe migration. When injecting a custom embedding model, extraction LLM, or text preprocessor, set `index_identity` to a stable version string so configuration changes cannot reuse incompatible state. The default OpenIE output limits are `openie_ner_max_tokens=2048` and `openie_triple_max_tokens=4096`, sized to leave room for reasoning tokens; they are part of the OpenIE identity, so an index built with the earlier development defaults (512 and 2048) must either be re-indexed or loaded with those values set explicitly.
 
 ## Quick Start
 
@@ -113,26 +113,43 @@ with HippoRAG(save_dir="outputs", llm_model_name="gpt-4o-mini", embedding_model_
 
 #### OpenAI-compatible endpoints
 
-Pass custom base URLs for OpenAI-compatible LLM and embedding servers:
-
-```sh
-export OPENAI_API_KEY=<the API key required by your endpoint>
-```
-
-For loopback endpoints that do not require authentication, HippoRAG supplies a client-local placeholder without changing the process-wide `OPENAI_API_KEY` environment variable.
-
-OpenAI-compatible chat and embedding endpoints must return standard `usage` data. HippoRAG fails closed instead of caching a response whose token cost cannot be accounted for.
+Pass custom base URLs for OpenAI-compatible LLM and embedding servers, such as a local vLLM server or a hosted gateway. No registration is needed for any OpenAI-compatible endpoint:
 
 ```python
 hipporag = HippoRAG(
     save_dir=save_dir,
     llm_model_name="your-llm",
     llm_base_url="http://localhost:8000/v1",
+    llm_api_key_env="MY_LLM_API_KEY",              # optional; defaults to OPENAI_API_KEY
     embedding_model_name="your-embedding-model",
     embedding_provider="openai",
     embedding_base_url="http://localhost:8001/v1",
+    embedding_api_key_env="MY_EMBEDDING_API_KEY",  # optional; defaults to OPENAI_API_KEY
 )
 ```
+
+API keys are read from `OPENAI_API_KEY` by default. Set `llm_api_key_env` or `embedding_api_key_env` to the name of another environment variable when the LLM and embedding endpoints need different keys, for example a gateway LLM with OpenAI embeddings. When the relevant variable is unset and the endpoint is a loopback address that does not require authentication, HippoRAG supplies a client-local placeholder without changing the process-wide `OPENAI_API_KEY` environment variable.
+
+Official OpenAI and Azure endpoints receive `max_completion_tokens`, the gateways listed under [Gateway prefixes](#gateway-prefixes) receive the parameter they document (also when reached through `llm_base_url`), and other endpoints receive the more widely supported `max_tokens`. Set `llm_supports_max_completion_tokens=True` in `BaseConfig` if your endpoint requires `max_completion_tokens`, for example for some reasoning models.
+
+OpenAI-compatible chat and embedding endpoints must return standard `usage` data. HippoRAG fails closed instead of caching a response whose token cost cannot be accounted for.
+
+To send a single test request through an endpoint:
+
+```sh
+python examples/demo_gateway.py --llm_name <vendor/model> --llm_base_url <base URL> --llm_api_key_env MY_LLM_API_KEY
+```
+
+#### Gateway prefixes
+
+A few gateways also have a model-name prefix that fills in their endpoint, key variable and token parameter. The prefix is stripped before the request is sent, and the request is identical to the generic configuration above; `llm_base_url` and `llm_api_key_env` still override the defaults.
+
+| Prefix | Equivalent `llm_base_url` | Default key variable |
+| --- | --- | --- |
+| `orcarouter/` | `https://api.orcarouter.ai/v1` | `ORCAROUTER_API_KEY` |
+| `atlascloud/` | `https://api.atlascloud.ai/v1` | `ATLASCLOUD_API_KEY` |
+
+These prefixes are kept for compatibility and are listed in the order they were added; they are not an endorsement, and HippoRAG is not affiliated with any gateway. New OpenAI-compatible gateways should use the generic configuration rather than a new prefix (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ### Amazon Bedrock
 
@@ -157,27 +174,6 @@ hipporag = HippoRAG(
 ```
 
 The Mantle endpoint and model availability are region-specific. HippoRAG requires an explicit endpoint and raises an error if the Bedrock API key is missing. To use an existing AWS profile instead, construct a `BaseConfig` with `bedrock_mantle_auth='aws_credentials'`, `bedrock_aws_profile='<profile>'`, and `bedrock_region='<region>'`; this explicitly enables SigV4 authentication. Mantle response storage is disabled by default (`store=False`); pass `store=True` to `infer` only when server-side conversation state is required.
-
-### OrcaRouter
-
-OrcaRouter is an OpenAI-compatible AI gateway that routes HippoRAG's requests across models from OpenAI, Anthropic, Google Gemini, DeepSeek, and more through a single endpoint. Prefix the OrcaRouter model ID with `orcarouter/` to use it as a named provider, as shown in `examples/demo_orcarouter.py`:
-
-```sh
-export ORCAROUTER_API_KEY=<your OrcaRouter API key>
-python examples/demo_orcarouter.py
-```
-
-The corresponding configuration is:
-
-```python
-hipporag = HippoRAG(
-    save_dir='outputs/orcarouter',
-    llm_model_name='orcarouter/anthropic/claude-opus-4.8',
-    embedding_model_name=embedding_model_name,
-)
-```
-
-Model names use the `vendor/model` namespace (for example `orcarouter/anthropic/claude-opus-4.8` or `orcarouter/google/gemini-2.5-flash`), and `orcarouter/auto` lets the router pick a live model automatically. HippoRAG uses the default OrcaRouter endpoint `https://api.orcarouter.ai/v1`; set `llm_base_url` explicitly to override it.
 
 ### Local Deployment (vLLM)
 
@@ -284,7 +280,7 @@ Provider integration scripts exercise indexing, graph reload, incremental update
 | --- | --- |
 | OpenAI | `python tests/integration/run_openai.py` |
 | Azure OpenAI | `python tests/integration/run_azure.py --azure_endpoint <resource-url> --azure_api_version <version> --azure_embedding_endpoint <resource-url>` |
-| OrcaRouter | `python tests/integration/run_orcarouter.py` |
+| OpenAI-compatible endpoints | `python tests/integration/run_gateway.py --llm_model_name <vendor/model> --llm_base_url <base URL> --llm_api_key_env <key variable>` |
 | Local vLLM | `python tests/integration/run_local.py` |
 | Transformers | `python tests/integration/run_transformers.py` |
 
@@ -472,13 +468,18 @@ When preparing your data, you may need to chunk each passage, as longer passage 
 │   │   ├── retrieval_eval.py       # Eval metrics for retrieval
 │   ├── 📂 information_extraction  # Implementation of all information extraction models
 │   │   ├── __init__.py
-|   |   ├── openie_openai_gpt.py    # Model for OpenIE with OpenAI GPT
+|   |   ├── openie_openai.py        # Online OpenIE through any chat LLM class
 |   |   ├── openie_vllm_offline.py  # Model for OpenIE with LLMs deployed offline with vLLM
+|   |   ├── openie_transformers_offline.py  # Offline OpenIE with Transformers
 │   ├── 📂 llm                      # Classes for inference with large language models
 │   │   ├── __init__.py             # Getter function
 |   |   ├── base.py                 # Config class for LLM inference and base LLM inference class to inherit
-|   |   ├── openai_gpt.py           # Class for inference with OpenAI GPT
-|   |   ├── vllm_llama.py           # Class for inference using a local vLLM server
+|   |   ├── openai_gpt.py           # OpenAI, Azure OpenAI and any OpenAI-compatible endpoint (e.g. a vLLM server)
+|   |   ├── gateways.py             # Frozen registry of gateway prefixes and the shared max-token parameter rule
+|   |   ├── gateway_llm.py          # Class for the registered gateway prefixes
+|   |   ├── bedrock_llm.py          # Amazon Bedrock Runtime through LiteLLM
+|   |   ├── bedrock_mantle.py       # Amazon Bedrock Mantle (Responses API)
+|   |   ├── transformers_llm.py     # Local inference with Transformers
 |   |   ├── vllm_offline.py         # Class for inference using the vLLM API directly
 │   ├── 📂 prompts                  # Prompt templates and prompt template manager class
 |   │   ├── 📂 dspy_prompts         # Prompts for filtering
@@ -501,8 +502,9 @@ When preparing your data, you may need to chunk each passage, as longer passage 
 │-- 📂 examples              # Minimal provider-specific usage examples
 │-- 📂 tests
 │   ├── 📂 integration       # Manual provider and vector-store integration checks
-│   ├── test_bedrock_mantle.py
-│   ├── test_offline_regressions.py
+│   ├── test_gateway_llm.py
+│   ├── test_regressions.py
+│   ├── ...
 │-- 📂 reproduce/dataset     # Sample and paper evaluation datasets
 │-- 📜 main.py               # Unified HippoRAG, Azure, and standard-RAG experiment entry point
 │-- 📜 README.md

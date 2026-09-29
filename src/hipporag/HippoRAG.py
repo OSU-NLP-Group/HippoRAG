@@ -11,7 +11,7 @@ import re
 import time
 from filelock import FileLock
 
-from .llm import _get_llm_class, BaseLLM
+from .llm import _get_llm_class, BaseLLM, find_gateway
 from .embedding_model import _get_embedding_model_class, BaseEmbeddingModel
 from .embedding_store import EmbeddingStore, get_embedding_store
 from .information_extraction import OpenIE
@@ -103,7 +103,9 @@ class HippoRAG:
                  azure_embedding_api_version=None,
                  azure_embedding_deployment=None,
                  index_identity=None,
-                 embedding_provider=None):
+                 embedding_provider=None,
+                 llm_api_key_env=None,
+                 embedding_api_key_env=None):
         """
         Initializes an instance of the class and its related components.
 
@@ -139,6 +141,8 @@ class HippoRAG:
             llm_model_name: LLM model name, can be inserted directly as well as through configuration file.
             embedding_model_name: Embedding model name, can be inserted directly as well as through configuration file.
             llm_base_url: LLM URL for a deployed LLM model, can be inserted directly as well as through configuration file.
+            llm_api_key_env: Environment variable holding the LLM API key for an OpenAI-compatible endpoint.
+            embedding_api_key_env: Environment variable holding the API key for an OpenAI-compatible embedding endpoint.
         """
         if global_config is None:
             self.global_config = BaseConfig()
@@ -160,6 +164,12 @@ class HippoRAG:
 
         if embedding_base_url is not None:
             self.global_config.embedding_base_url = embedding_base_url
+
+        if llm_api_key_env is not None:
+            self.global_config.llm_api_key_env = llm_api_key_env
+
+        if embedding_api_key_env is not None:
+            self.global_config.embedding_api_key_env = embedding_api_key_env
 
         if azure_endpoint is not None:
             self.global_config.azure_endpoint = azure_endpoint
@@ -353,13 +363,14 @@ class HippoRAG:
     def _current_openie_provenance(self) -> Dict[str, Any]:
         endpoint = None
         region = None
+        gateway = find_gateway(self.global_config.llm_name)
         if self.global_config.openie_mode == "online" and self.global_config.llm_name.startswith("bedrock/"):
             region = self.global_config.bedrock_region or os.getenv("AWS_REGION_NAME") or os.getenv("AWS_DEFAULT_REGION")
         elif self.global_config.openie_mode == "online" and self.global_config.llm_name.startswith("bedrock-mantle/"):
             endpoint = self.global_config.llm_base_url
             region = self.global_config.bedrock_region or os.getenv("AWS_REGION_NAME") or os.getenv("AWS_DEFAULT_REGION")
-        elif self.global_config.openie_mode == "online" and self.global_config.llm_name.startswith("orcarouter/"):
-            endpoint = self.global_config.llm_base_url or "https://api.orcarouter.ai/v1"
+        elif self.global_config.openie_mode == "online" and gateway is not None:
+            endpoint = self.global_config.llm_base_url or gateway.default_base_url
         elif self.global_config.openie_mode == "online" and not self.global_config.llm_name.startswith("Transformers/"):
             endpoint = self.global_config.azure_endpoint or self.global_config.llm_base_url or "https://api.openai.com/v1"
         if self.global_config.openie_mode == "online":

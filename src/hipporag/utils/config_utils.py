@@ -290,7 +290,7 @@ class BaseConfig:
     # Additive settings are kept after the original fields to preserve positional compatibility.
     llm_supports_max_completion_tokens: Optional[bool] = field(
         default=None,
-        metadata={"help": "Whether a chat-completions endpoint accepts max_completion_tokens. Auto-detected for official OpenAI and Azure endpoints when unset."}
+        metadata={"help": "Whether a chat-completions endpoint accepts max_completion_tokens. When unset, official OpenAI and Azure endpoints and registered gateways that document it use max_completion_tokens; other endpoints use max_tokens."}
     )
     azure_api_version: Optional[str] = field(
         default=None,
@@ -313,12 +313,12 @@ class BaseConfig:
         metadata={"help": "Maximum number of concurrent online OpenIE requests."}
     )
     openie_ner_max_tokens: int = field(
-        default=512,
-        metadata={"help": "Maximum output tokens for each online OpenIE NER request."}
+        default=2048,
+        metadata={"help": "Maximum output tokens for each online OpenIE NER request. Sized to leave room for reasoning tokens."}
     )
     openie_triple_max_tokens: int = field(
-        default=2048,
-        metadata={"help": "Maximum output tokens for each online OpenIE triple request."}
+        default=4096,
+        metadata={"help": "Maximum output tokens for each online OpenIE triple request. Sized to leave room for reasoning tokens."}
     )
     embedding_request_timeout: float = field(
         default=60.0,
@@ -331,6 +331,14 @@ class BaseConfig:
     vector_store_namespace: Optional[str] = field(
         default=None,
         metadata={"help": "Stable, unique index namespace for vector database collections. Defaults to a fingerprint of the working directory."}
+    )
+    llm_api_key_env: Optional[str] = field(
+        default=None,
+        metadata={"help": "Name of the environment variable holding the LLM API key. When unset, OpenAI-compatible endpoints use OPENAI_API_KEY and named gateways use their registered variable."}
+    )
+    embedding_api_key_env: Optional[str] = field(
+        default=None,
+        metadata={"help": "Name of the environment variable holding the OpenAI-compatible embedding API key. When unset, OPENAI_API_KEY is used."}
     )
     
     

@@ -40,6 +40,16 @@ def validate_openai_base_url(base_url: Optional[str], operation_path: str, setti
     return base_url.rstrip("/")
 
 
+def resolve_openai_api_key(base_url: Optional[str], api_key_env: Optional[str], setting_name: str) -> Optional[str]:
+    """Read the key from ``api_key_env`` when configured; otherwise defer to the OpenAI SDK default."""
+    if api_key_env is None:
+        return local_openai_api_key(base_url)
+    api_key = os.getenv(api_key_env)
+    if not api_key:
+        raise ValueError(f"{api_key_env} is required because {setting_name}={api_key_env!r} is set.")
+    return api_key
+
+
 def local_openai_api_key(base_url: Optional[str]) -> Optional[str]:
     if base_url is None or os.getenv("OPENAI_API_KEY"):
         return None

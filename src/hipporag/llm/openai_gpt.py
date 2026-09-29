@@ -13,8 +13,9 @@ from ..utils.llm_utils import (
     TextChatMessage
 )
 from ..utils.logging_utils import get_logger
-from ..utils.openai_utils import local_openai_api_key, resolve_azure_openai_settings, validate_openai_base_url
+from ..utils.openai_utils import resolve_azure_openai_settings, resolve_openai_api_key, validate_openai_base_url
 from .base import BaseLLM, LLMConfig, normalize_generation_token_params
+from .gateways import chat_max_tokens_key
 
 logger = get_logger(__name__)
 
@@ -131,13 +132,14 @@ class CacheOpenAI(BaseLLM):
         try:
             if azure_settings is None:
                 self.openai_client = OpenAI(
-                    api_key=local_openai_api_key(self.llm_base_url),
+                    api_key=resolve_openai_api_key(self.llm_base_url, self.global_config.llm_api_key_env, "llm_api_key_env"),
                     base_url=self.llm_base_url,
                     http_client=client,
                     max_retries=self.max_retries,
                 )
             else:
                 self.openai_client = AzureOpenAI(
+                    api_key=resolve_openai_api_key(None, self.global_config.llm_api_key_env, "llm_api_key_env"),
                     api_version=azure_settings.api_version,
                     azure_endpoint=azure_settings.endpoint,
                     azure_deployment=azure_settings.deployment,
@@ -174,11 +176,7 @@ class CacheOpenAI(BaseLLM):
         messages: List[TextChatMessage],
         **kwargs
     ) -> Tuple[str, dict, bool]:
-        supports_max_completion_tokens = self.global_config.llm_supports_max_completion_tokens
-        if supports_max_completion_tokens is None:
-            base_url = self.global_config.llm_base_url or "https://api.openai.com/v1"
-            supports_max_completion_tokens = self.global_config.azure_endpoint is not None or "api.openai.com" in base_url
-        target_token_key = "max_completion_tokens" if supports_max_completion_tokens else "max_tokens"
+        target_token_key = chat_max_tokens_key(self.global_config, self.global_config.llm_base_url)
         params = normalize_generation_token_params(self.llm_config.generate_params, kwargs, target_token_key)
         _validate_azure_request_model(self.global_config, getattr(self, "request_model_name", getattr(self, "llm_name", None)), params)
         params["messages"] = messages
