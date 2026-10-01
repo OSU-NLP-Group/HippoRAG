@@ -23,7 +23,7 @@ setuptools.setup(
         "networkx==3.4.2",
         "python_igraph==0.11.8",
         "tiktoken==0.7.0",
-        "pydantic==2.10.4",
+        "pydantic>=2.10.4,<3",
         "tenacity==8.5.0",
         "einops", # No version specified
         "tqdm", # No version specified
@@ -44,7 +44,9 @@ setuptools.setup(
         "transformers-embedding": ["sentence-transformers>=3.0"],
         "gritlm": ["gritlm==1.0.2"],
         "vllm": ["vllm==0.6.6.post1", "outlines"],
+        "mcp": ["mcp>=2.2,<3"],
     },
+    entry_points={"console_scripts": ["hipporag-mcp=hipporag.mcp_server:main"]},
     package_data={"hipporag": ["prompts/dspy_prompts/*.json"]},
     include_package_data=True,
 )

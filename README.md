@@ -209,6 +209,52 @@ hipporag = HippoRAG(
 # Same indexing, retrieval and QA as with OpenAI models above
 ```
 
+## MCP Server
+
+HippoRAG can serve a persistent index to agents and MCP clients such as Claude Code, Claude Desktop, Cursor or VS Code through the [Model Context Protocol](https://modelcontextprotocol.io). Install the optional extra:
+
+```sh
+pip install 'hipporag[mcp]'
+```
+
+The server exposes these tools:
+
+| Tool | Description |
+| --- | --- |
+| `retrieve` | Return the `top_k` most relevant passages for a query, with scores and source metadata. |
+| `rag_qa` | Answer a question with the configured LLM, grounded in retrieved passages. |
+| `index` | Add documents, as plain strings or `{"text", "source_id", "metadata"}` objects. Passages already in the index are skipped. |
+| `delete` | Remove passages by exact text or by `source_id`. |
+| `index_stats` | Report passage, entity, fact and graph counts. |
+
+The active configuration, with secrets redacted, is available as the resource `hipporag://config`. The index is stored in `--save_dir` and persists across restarts. The same LLM and embedding settings must be used every time the server opens an existing index (see [Upgrading existing indexes](#upgrading-existing-indexes)).
+
+For a local client using stdio, for example Claude Code:
+
+```sh
+claude mcp add hipporag -e OPENAI_API_KEY=<your OpenAI API key> -- hipporag-mcp --save_dir /path/to/index --llm_name gpt-4o-mini --embedding_model_name text-embedding-3-small
+```
+
+Other clients use the equivalent JSON configuration:
+
+```json
+{
+  "mcpServers": {
+    "hipporag": {
+      "command": "hipporag-mcp",
+      "args": ["--save_dir", "/path/to/index", "--llm_name", "gpt-4o-mini", "--embedding_model_name", "text-embedding-3-small"],
+      "env": {"OPENAI_API_KEY": "<your OpenAI API key>"}
+    }
+  }
+}
+```
+
+To serve over Streamable HTTP at `http://127.0.0.1:8000/mcp`, add `--transport streamable-http` (with `--host` and `--port` if needed). The HTTP server has no authentication. Keep it on a loopback address, or put it behind an authenticating proxy and add `--read_only` to disable the `index` and `delete` tools.
+
+LLM and embedding endpoints are configured with the same options as the Python API: `--llm_base_url`, `--llm_api_key_env`, `--embedding_base_url`, `--embedding_api_key_env`, `--embedding_provider`, `--azure_endpoint` and `--azure_embedding_endpoint`. Any other `BaseConfig` field can be set with a repeatable `--config KEY=VALUE`, for example `--config retrieval_top_k=100 --config vector_store_type=qdrant`. Run `hipporag-mcp --help` for the full list.
+
+Tool calls are executed one at a time on a dedicated worker thread, so a long `index` call delays later calls but does not block the MCP session.
+
 ## Vector Store Backends
 
 HippoRAG stores embeddings in local Parquet files by default. It can also use
@@ -272,6 +318,8 @@ Run the offline unit tests before submitting changes:
 python -m unittest discover -s tests -p 'test_*.py'
 python tests/integration/run_vector_stores.py
 ```
+
+The MCP server tests in `tests/test_mcp_server.py` are skipped unless the `mcp` extra is installed. They start the real `hipporag-mcp` command over stdio and Streamable HTTP against a local fake OpenAI-compatible endpoint, so they need no API key.
 
 Provider integration scripts exercise indexing, graph reload, incremental updates, and deletion. They require the corresponding API or local model service:
 
@@ -496,6 +544,7 @@ When preparing your data, you may need to chunk each passage, as longer passage 
 |   |   ├── ...
 │   ├── __init__.py
 │   ├── HippoRAG.py          # Highest level class for initiating retrieval, question answering, and evaluations
+│   ├── mcp_server.py        # MCP server (`hipporag-mcp`) exposing an index to agents
 │   ├── embedding_store.py   # Storage database to load, manage and save embeddings for passages, entities and facts.
 │   ├── rerank.py            # Reranking and filtering methods
 │-- 📂 examples              # Minimal provider-specific usage examples
