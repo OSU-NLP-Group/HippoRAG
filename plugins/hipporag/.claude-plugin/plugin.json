@@ -1,0 +1,62 @@
+{
+  "name": "hipporag",
+  "version": "2.0.0-alpha.5",
+  "description": "Graph-based long-term memory (HippoRAG) for Claude Code: index documents into a persistent knowledge graph and retrieve multi-hop evidence.",
+  "author": { "name": "OSU NLP Group" },
+  "homepage": "https://github.com/OSU-NLP-Group/HippoRAG",
+  "repository": "https://github.com/OSU-NLP-Group/HippoRAG",
+  "license": "MIT",
+  "keywords": ["rag", "memory", "knowledge-graph", "retrieval", "mcp"],
+  "userConfig": {
+    "openai_api_key": {
+      "type": "string",
+      "title": "API key",
+      "description": "API key for the LLM and embedding endpoints (OpenAI by default). Stored in the system keychain.",
+      "sensitive": true,
+      "required": false
+    },
+    "llm_name": {
+      "type": "string",
+      "title": "LLM",
+      "description": "LLM used for OpenIE extraction during indexing and for rag_qa answers.",
+      "default": "gpt-4o-mini"
+    },
+    "embedding_model_name": {
+      "type": "string",
+      "title": "Embedding model",
+      "description": "Embedding model for passages, entities and facts.",
+      "default": "text-embedding-3-small"
+    },
+    "llm_base_url": {
+      "type": "string",
+      "title": "LLM base URL",
+      "description": "Optional OpenAI-compatible endpoint for the LLM, e.g. http://localhost:8000/v1. Leave empty for OpenAI.",
+      "required": false
+    },
+    "embedding_base_url": {
+      "type": "string",
+      "title": "Embedding base URL",
+      "description": "Optional OpenAI-compatible endpoint for embeddings. Leave empty for OpenAI.",
+      "required": false
+    }
+  },
+  "mcpServers": {
+    "hipporag": {
+      "command": "uvx",
+      "args": [
+        "--python", "3.12",
+        "--from", "hipporag[mcp] @ git+https://github.com/OSU-NLP-Group/HippoRAG",
+        "hipporag-mcp",
+        "--save_dir", "${CLAUDE_PLUGIN_DATA}/index",
+        "--llm_name", "${user_config.llm_name}",
+        "--embedding_model_name", "${user_config.embedding_model_name}",
+        "--llm_base_url", "${user_config.llm_base_url}",
+        "--embedding_base_url", "${user_config.embedding_base_url}",
+        "--log_level", "WARNING"
+      ],
+      "env": {
+        "OPENAI_API_KEY": "${user_config.openai_api_key}"
+      }
+    }
+  }
+}

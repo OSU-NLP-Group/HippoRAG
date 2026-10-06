@@ -1,0 +1,15 @@
+{
+  "name": "hipporag",
+  "owner": { "name": "OSU NLP Group" },
+  "metadata": {
+    "description": "HippoRAG plugins for Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "hipporag",
+      "source": "./plugins/hipporag",
+      "description": "Graph-based long-term memory (HippoRAG) for Claude Code: index documents into a persistent knowledge graph and retrieve multi-hop evidence.",
+      "category": "knowledge"
+    }
+  ]
+}

@@ -379,7 +379,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def build_config(args: argparse.Namespace) -> BaseConfig:
-    overrides = {name: getattr(args, name) for name in _CONFIG_FLAGS if getattr(args, name) is not None}
+    # Empty flags count as unset, so launchers (e.g. the Claude Code plugin) can always pass optional settings.
+    overrides = {name: getattr(args, name) for name in _CONFIG_FLAGS if getattr(args, name) not in (None, "")}
     for key, value in args.config:
         if key in overrides and overrides[key] != value:
             raise ValueError(f"{key} is set both as a flag and through --config.")

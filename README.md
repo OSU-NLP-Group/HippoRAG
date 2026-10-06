@@ -255,6 +255,25 @@ LLM and embedding endpoints are configured with the same options as the Python A
 
 Tool calls are executed one at a time on a dedicated worker thread, so a long `index` call delays later calls but does not block the MCP session.
 
+### Claude Code Plugin
+
+This repository is also a Claude Code plugin marketplace. The plugin bundles the MCP server with a skill that teaches Claude when to use each tool, plus a `/hipporag:index-folder` command. Install it from a Claude Code session:
+
+```
+/plugin marketplace add OSU-NLP-Group/HippoRAG
+/plugin install hipporag@hipporag
+```
+
+Claude Code prompts for the API key (stored in the system keychain), the LLM and embedding model names, and optional OpenAI-compatible base URLs. The server is launched with [`uvx`](https://docs.astral.sh/uv/), so [uv](https://docs.astral.sh/uv/getting-started/installation/) must be installed; HippoRAG itself does not need to be. The index is stored in the plugin's data directory (`~/.claude/plugins/data/`) and is shared across projects.
+
+The first launch installs HippoRAG and its dependencies, including PyTorch, which can take longer than Claude Code's MCP startup timeout. If the server fails to connect the first time, pre-install it once and restart Claude Code:
+
+```sh
+uvx --python 3.12 --from 'hipporag[mcp] @ git+https://github.com/OSU-NLP-Group/HippoRAG' hipporag-mcp --help
+```
+
+Changing the LLM or embedding model switches to a separate index, because each index is tied to the models it was built with.
+
 ## Vector Store Backends
 
 HippoRAG stores embeddings in local Parquet files by default. It can also use
@@ -554,6 +573,8 @@ When preparing your data, you may need to chunk each passage, as longer passage 
 │   ├── test_regressions.py
 │   ├── ...
 │-- 📂 reproduce/dataset     # Sample and paper evaluation datasets
+│-- 📂 plugins/hipporag      # Claude Code plugin (MCP server config and skills)
+│-- 📂 .claude-plugin        # Claude Code plugin marketplace manifest
 │-- 📜 main.py               # Unified HippoRAG, Azure, and standard-RAG experiment entry point
 │-- 📜 README.md
 │-- 📜 requirements.txt   # Dependencies list
