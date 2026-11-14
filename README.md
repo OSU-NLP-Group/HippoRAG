@@ -359,7 +359,7 @@ To use our code to run experiments we recommend you clone this repository and fo
 ### Data for Reproducibility
 
 We evaluated several sampled datasets in our paper, some of which are already included in the `reproduce/dataset` directory of this repo. For the complete set of datasets, please visit
-our [HuggingFace dataset](https://huggingface.co/datasets/osunlp/HippoRAG_v2) and place them under `reproduce/dataset`. We also provide the OpenIE results for both `gpt-4o-mini` and `Llama-3.3-70B-Instruct` for our `musique` sample under `outputs/musique`.
+our [HuggingFace dataset](https://huggingface.co/datasets/osunlp/HippoRAG_2) and place them under `reproduce/dataset`. We also provide the OpenIE results for both `gpt-4o-mini` and `Llama-3.3-70B-Instruct` for our `musique` sample (all 11,656 corpus passages) under `outputs/musique`. These are the extractions behind the MuSiQue column of Table 10 in the paper. They predate OpenIE provenance tracking and have no `provenance` field, so the current version rejects them as cached OpenIE state; use them to inspect or compare extractions rather than to skip OpenIE.
 
 To test your environment is properly set up, you can use the small dataset `reproduce/dataset/sample.json` for debugging as shown below.
 
